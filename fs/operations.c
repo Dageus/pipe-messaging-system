@@ -8,6 +8,11 @@
 
 #include "betterassert.h"
 
+struct inode {
+    ino_t ino;        /* inode number */
+    nlink_t nlink;    /* number of hard links */
+};
+
 tfs_params tfs_default_params() {
     tfs_params params = {
         .max_inode_count = 64,
@@ -73,6 +78,9 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
     return find_in_dir(root_inode, name);
 }
 
+/*
+alter function so that it takes sym links into account
+*/
 int tfs_open(char const *name, tfs_file_mode_t mode) {
     // Checks if the path name is valid
     if (!valid_pathname(name)) {
