@@ -108,7 +108,6 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
                 char *target = malloc(sizeof(char) * inode->i_size);
                 tfs_read(status, target, inode->i_size);
                 tfs_close(status);
-                //Look up the target
                 return tfs_open(target, mode);
             }
         }
