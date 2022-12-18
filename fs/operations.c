@@ -74,7 +74,7 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
 }
 
 /*
-alter function so that it takes sym links into account
+* alter function so that it takes sym links into account
 */
 int tfs_open(char const *name, tfs_file_mode_t mode) {
     // Checks if the path name is valid
@@ -93,6 +93,13 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
+
+        if (inode->i_node_type == T_SYM_LINK){
+            if (inode->i_data_block == -1) {
+                
+            }
+            open();
+        }
 
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
@@ -135,21 +142,66 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     // opened but it remains created
 }
 
-int tfs_sym_link(char const *target, char const *link_name) {
+int tfs_sym_link(char const *target, char const *link_name) {   
+    if (!valid_pathname(link_name)) {
+        return -1;
+    }
+
+    int target_inum = tfs_lookup(target, inode_get(ROOT_DIR_INUM));
+    // Verify if we're creating a hard link to something that doesn't exist
+    if (target_inum == -1) {
+        return -1;
+    }
+
+    int new_inum = inode_create(T_SYM_LINK);
+    // Verify if we're able to creat the soft link
+    if (new_inum == -1) {
+        return -1;
+    }
+
+    // Add entry in the root directory
+    int status = add_dir_entry(inode_get(ROOT_DIR_INUM), link_name + 1, new_inum);
+    if (status == -1) {
+        inode_delete(new_inum);
+        return -1; // no space in directory
+    }
+
+    int link = tfs_open(link_name, TFS_O_APPEND);
+    if (link == -1) {
+        return -1;
+    }
+    tfs_write(link, target, strlen(target));
+    tfs_close(link);
+
+    return 0;
+}
+
+int tfs_link(char const *target, char const *link_name) {
     // Checks if the path name is valid
     if (!valid_pathname(link_name)) {
         return -1;
     }
-    //create inode that points to target's pointer
-    int inum = inode_create(T_SYMLINK);
-
-    return 0;
-
-}
-
-int tfs_link(char const *target, char const *link_name) {
     
+    int inum = tfs_lookup(target, inode_get(ROOT_DIR_INUM));
+    // Verify if we're creating a hard link to something that doesn't exist
+    if (inum == -1) {
+        return -1;
+    }
 
+    inode_t *inode = inode_get(inum);
+    // Verify if we're creating a hard link to a soft link
+    if (inode->i_node_type == T_SYM_LINK) {
+        return -1;
+    }
+
+    int status = add_dir_entry(inode_get(ROOT_DIR_INUM), link_name + 1, inum);
+    // Verify if we're able to create the hard link
+    if (status == -1) {
+        return -1;
+    }
+
+    inode->num_hard_links++;
+    
     return 0;
 }
 
@@ -237,7 +289,20 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
+    // Checks if the path name is valid
+    int inum = tfs_lookup(target, inode_get(ROOT_DIR_INUM));
+    if (inum == -1) {
+        return -1;
+    }
+
+    inode_t *inode = inode_get(inum);
+    if (inode->num_hard_links > 1) {
+        inode->num_hard_links--;
+    } else {
+        inode_delete(inum);
+    }
     
+    return 0;
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
