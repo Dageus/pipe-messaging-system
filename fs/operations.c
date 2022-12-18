@@ -157,7 +157,7 @@ int tfs_link(char const *target, char const *link_name) {
     // ^ this is a trick to keep the compiler from complaining about unused
     // variables. TODO: remove
 
-    int inode = tfs_lookup(target); // check mistake
+    //int inode = tfs_lookup(target); // check mistake de momento não são dados argumentos suficienets para a função
 
     return 0;
 
