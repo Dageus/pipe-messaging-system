@@ -189,10 +189,10 @@ int tfs_sym_link(char const *target, char const *link_name) {
 
 int tfs_link(char const *target, char const *link_name) {
     // Checks if the path name is valid
-    if (!valid_pathname(link_name)) {
+    if (!valid_pathname(target)) {
         return -1;
     }
-    
+
     int inum = tfs_lookup(target, inode_get(ROOT_DIR_INUM));
     // Verify if we're creating a hard link to something that doesn't exist
     if (inum == -1) {
@@ -202,12 +202,14 @@ int tfs_link(char const *target, char const *link_name) {
     inode_t *inode = inode_get(inum);
     // Verify if we're creating a hard link to a soft link
     if (inode->i_node_type == T_SYM_LINK) {
+        printf("2\n");
         return -1;
     }
 
     int status = add_dir_entry(inode_get(ROOT_DIR_INUM), link_name + 1, inum);
     // Verify if we're able to create the hard link
     if (status == -1) {
+        printf("4\n");
         return -1;
     }
 
@@ -306,6 +308,7 @@ int tfs_unlink(char const *target) {
         return -1;
     }
 
+
     inode_t *inode = inode_get(inum);
     if (inode->num_hard_links > 1) {
         inode->num_hard_links--;
@@ -313,7 +316,7 @@ int tfs_unlink(char const *target) {
         inode_delete(inum);
     }
     
-    return 0;
+    return clear_dir_entry(inode_get(ROOT_DIR_INUM), target + 1);
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
