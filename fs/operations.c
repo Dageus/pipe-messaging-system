@@ -261,14 +261,24 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     // ^ this is a trick to keep the compiler from complaining about unused
     // variables. TODO: remove
 
-    FILE *f = fopen(source_path, "r");
-    if (f == NULL){
-        perror("File doesn't exist.\n");
+    FILE *source = fopen(source_path, "r");
+    if (source == NULL)
         return -1;
+    
+    int dest = tfs_open(dest_path, TFS_O_CREAT);
+    if (dest == -1)
+        return -1;
+    
+    char buffer[128];
+    size_t read = 128;
+    while (read == 128){
+        read = fread(buffer, 1, 128, source);
+        ssize_t status = tfs_write(dest, buffer, read);
+        if (status == -1)
+            return -1;
     }
-    // code goes here
 
+    tfs_close(dest);
+    fclose(source);
     return 0;
-
-    PANIC("TODO: tfs_copy_from_external_fs");
 }
