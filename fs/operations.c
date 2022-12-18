@@ -202,14 +202,12 @@ int tfs_link(char const *target, char const *link_name) {
     inode_t *inode = inode_get(inum);
     // Verify if we're creating a hard link to a soft link
     if (inode->i_node_type == T_SYM_LINK) {
-        printf("2\n");
         return -1;
     }
 
     int status = add_dir_entry(inode_get(ROOT_DIR_INUM), link_name + 1, inum);
     // Verify if we're able to create the hard link
     if (status == -1) {
-        printf("4\n");
         return -1;
     }
 

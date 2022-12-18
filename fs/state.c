@@ -339,13 +339,11 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
  */
 int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
     if (strlen(sub_name) == 0 || strlen(sub_name) > MAX_FILE_NAME - 1) {
-        printf("add_dir_entry: invalid sub_name\n");
         return -1; // invalid sub_name
     }
 
     insert_delay(); // simulate storage access delay to inode with inumber
     if (inode->i_node_type != T_DIRECTORY) {
-        printf("add_dir_entry: inode is not a directory\n");
         return -1; // not a directory
     }
 
@@ -356,9 +354,6 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
 
     // Finds and fills the first empty entry
     for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
-        printf("dir_entry[%d].d_inumber = %d\n", (int) i, dir_entry[i].d_inumber);
-        //print the sub name
-        printf("dir_entry[%d].d_name = %s\n", (int) i, dir_entry[i].d_name);
         if (dir_entry[i].d_inumber == -1) {
             dir_entry[i].d_inumber = sub_inumber;
             strncpy(dir_entry[i].d_name, sub_name, MAX_FILE_NAME - 1);
