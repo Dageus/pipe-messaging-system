@@ -8,11 +8,6 @@
 
 #include "betterassert.h"
 
-struct inode {
-    ino_t ino;        /* inode number */
-    nlink_t nlink;    /* number of hard links */
-};
-
 tfs_params tfs_default_params() {
     tfs_params params = {
         .max_inode_count = 64,
@@ -141,27 +136,21 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    
-
-    PANIC("TODO: tfs_sym_link");
-}
-
-int tfs_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    //int inode = tfs_lookup(target); // check mistake de momento não são dados argumentos suficienets para a função
+    // Checks if the path name is valid
+    if (!valid_pathname(link_name)) {
+        return -1;
+    }
+    //create inode that points to target's pointer
+    int inum = inode_create(T_SYMLINK);
 
     return 0;
 
-    PANIC("TODO: tfs_link");
+}
+
+int tfs_link(char const *target, char const *link_name) {
+    
+
+    return 0;
 }
 
 int tfs_close(int fhandle) {
@@ -248,19 +237,10 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
-    (void)target;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    PANIC("TODO: tfs_unlink");
+    
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    (void) source_path;
-    (void) dest_path;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
     FILE *source = fopen(source_path, "r");
     if (source == NULL)
         return -1;
