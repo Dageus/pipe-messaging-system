@@ -95,9 +95,21 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
                       "tfs_open: directory files must have an inode");
 
         if (inode->i_node_type == T_SYM_LINK){
-            char target[128];
-            tfs_read(inum, target, inode->i_data_block);
-            return tfs_open(target, mode);
+            //If the soft link was empty open it so you can write on it
+            if (inode->i_data_block == -1) {
+                return add_to_open_file_table(inum, 0);
+            } 
+            //If the soft link was not empty, read the target from it and open the target
+            else {
+                int status = add_to_open_file_table(inum, 0);
+                if (status == -1) {
+                    return -1;
+                }
+                char *target = malloc(sizeof(char) * inode->i_size);
+                tfs_read(status, target, inode->i_size);
+                tfs_close(status);
+                return tfs_open(target, mode);
+            }
         }
 
         // Truncate (if requested)
