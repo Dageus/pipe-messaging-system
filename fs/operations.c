@@ -95,10 +95,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
                       "tfs_open: directory files must have an inode");
 
         if (inode->i_node_type == T_SYM_LINK){
-            if (inode->i_data_block == -1) {
-                
-            }
-            open();
+            char target[128];
+            tfs_read(inum, target, inode->i_data_block);
+            return tfs_open(target, mode);
         }
 
         // Truncate (if requested)

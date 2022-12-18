@@ -28,8 +28,6 @@ typedef struct {
     size_t i_size;
     int i_data_block;
     int num_hard_links;
-
-    // in a more complete FS, more fields could exist here
 } inode_t;
 
 typedef enum { FREE = 0, TAKEN = 1 } allocation_state_t;
