@@ -16,27 +16,21 @@ static tfs_params fs_params;
 
 // Inode table
 static inode_t *inode_table;
-static pthread_rwlock_t inode_locks; // protects inode_table
+static pthread_rwlock_t *inode_locks;       // protects inode_table
 static allocation_state_t *freeinode_ts;
-static pthread_rwlock_t freeinode_ts_rwl; // protects freeinode_ts
-
-// lock and unlock accesses to the inode table
-#define LOCK_INODE_TABLE() pthread_rwlock_wrlock(&inode_locks)
-#define UNLOCK_INODE_TABLE() pthread_rwlock_unlock(&inode_locks)
-
-// lock and unlock accesses to the free inode table
-#define LOCK_FREE_INODE_TABLE() pthread_rwlock_wrlock(&freeinode_ts_rwl)
-#define UNLOCK_FREE_INODE_TABLE() pthread_rwlock_unlock(&freeinode_ts_rwl)
+static pthread_rwlock_t freeinode_ts_rwl;  // protects freeinode_ts
 
 // Data blocks
 static char *fs_data; // # blocks * block size
 static allocation_state_t *free_blocks;
+static pthread_rwlock_t *free_blocks_rwl;    // protects free_blocks
 
 /*
  * Volatile FS state
  */
 static open_file_entry_t *open_file_table;
 static allocation_state_t *free_open_file_entries;
+static pthread_mutex_t *free_open_file_entries_mutex;
 
 // Convenience macros
 #define INODE_TABLE_SIZE (fs_params.max_inode_count)
@@ -44,6 +38,14 @@ static allocation_state_t *free_open_file_entries;
 #define MAX_OPEN_FILES (fs_params.max_open_files_count)
 #define BLOCK_SIZE (fs_params.block_size)
 #define MAX_DIR_ENTRIES (BLOCK_SIZE / sizeof(dir_entry_t))
+
+// lock and unlock accesses to the free inode table
+#define LOCK_FREE_INODE_TABLE pthread_rwlock_wrlock(&freeinode_ts_rwl)
+#define UNLOCK_FREE_INODE_TABLE pthread_rwlock_unlock(&freeinode_ts_rwl)
+
+// lock and unlock accesses to the free block table
+#define LOCK_FREE_BLOCK_TABLE pthread_rwlock_wrlock(&free_blocks_rwl)
+#define UNLOCK_FREE_BLOCK_TABLE pthread_rwlock_unlock(&free_blocks_rwl)
 
 static inline bool valid_inumber(int inumber) {
     return inumber >= 0 && inumber < INODE_TABLE_SIZE;
@@ -110,9 +112,11 @@ int state_init(tfs_params params) {
     }
 
     inode_table = malloc(INODE_TABLE_SIZE * sizeof(inode_t));
+    inode_locks = malloc(INODE_TABLE_SIZE * sizeof(pthread_rwlock_t)); // allocate locks for each inode
     freeinode_ts = malloc(INODE_TABLE_SIZE * sizeof(allocation_state_t));
     fs_data = malloc(DATA_BLOCKS * BLOCK_SIZE);
     free_blocks = malloc(DATA_BLOCKS * sizeof(allocation_state_t));
+    free_blocks_rwl = malloc(DATA_BLOCKS * sizeof(pthread_rwlock_t)); // allocate locks for each block
     open_file_table = malloc(MAX_OPEN_FILES * sizeof(open_file_entry_t));
     free_open_file_entries =
         malloc(MAX_OPEN_FILES * sizeof(allocation_state_t));
@@ -124,15 +128,22 @@ int state_init(tfs_params params) {
 
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         freeinode_ts[i] = FREE;
+        pthread_rwlock_init(&inode_locks[i], NULL);         // initialize locks
     }
+
+    pthread_rwlock_init(&freeinode_ts_rwl, NULL);           // initialize free inode table lock
 
     for (size_t i = 0; i < DATA_BLOCKS; i++) {
         free_blocks[i] = FREE;
     }
 
+    pthread_rwlock_init(&free_blocks_rwl, NULL);            // initialize free blocks lock
+
     for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
         free_open_file_entries[i] = FREE;
     }
+
+    pthread_mutex_init(&free_open_file_entries_mutex, NULL); // initialize free open file entries lock
 
     return 0;
 }
@@ -149,6 +160,20 @@ int state_destroy(void) {
     free(free_blocks);
     free(open_file_table);
     free(free_open_file_entries);
+
+    for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
+        pthread_rwlock_destroy(&inode_locks[i]);    // destroy locks
+    }
+
+    for (size_t i = 0; i < DATA_BLOCKS; i++) {
+        pthread_rwlock_destroy(&free_blocks_rwl[i]); // destroy locks
+    }
+
+    //destroy all locks
+    pthread_rwlock_destroy(&freeinode_ts_rwl);
+    pthread_rwlock_destroy(&free_blocks_rwl);
+    pthread_mutex_destroy(&free_open_file_entries_mutex);
+
 
     inode_table = NULL;
     freeinode_ts = NULL;
@@ -206,9 +231,12 @@ static int inode_alloc(void) {
  *   - (if creating a directory) No free data blocks.
  */
 int inode_create(inode_type i_type) {
+    LOCK_FREE_INODE_TABLE; // lock free inode table
     int inumber = inode_alloc();
     if (inumber == -1) {
         return -1; // no free slots in inode table
+        // unlock freeinode_ts_rwl
+        UNLOCK_FREE_INODE_TABLE;
     }
 
     inode_t *inode = &inode_table[inumber];
