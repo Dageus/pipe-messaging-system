@@ -16,7 +16,17 @@ static tfs_params fs_params;
 
 // Inode table
 static inode_t *inode_table;
+static pthread_rwlock_t inode_locks; // protects inode_table
 static allocation_state_t *freeinode_ts;
+static pthread_rwlock_t freeinode_ts_rwl; // protects freeinode_ts
+
+// lock and unlock accesses to the inode table
+#define LOCK_INODE_TABLE() pthread_rwlock_wrlock(&inode_locks)
+#define UNLOCK_INODE_TABLE() pthread_rwlock_unlock(&inode_locks)
+
+// lock and unlock accesses to the free inode table
+#define LOCK_FREE_INODE_TABLE() pthread_rwlock_wrlock(&freeinode_ts_rwl)
+#define UNLOCK_FREE_INODE_TABLE() pthread_rwlock_unlock(&freeinode_ts_rwl)
 
 // Data blocks
 static char *fs_data; // # blocks * block size

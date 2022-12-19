@@ -1,12 +1,20 @@
 #include "operations.h"
 #include "config.h"
 #include "state.h"
+
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "betterassert.h"
+
+static pthread_mutex_t mutex;
+
+#define LOCK pthread_mutex_lock(&mutex)
+#define UNLOCK pthread_mutex_unlock(&mutex)
+
 
 tfs_params tfs_default_params() {
     tfs_params params = {
@@ -30,6 +38,8 @@ int tfs_init(tfs_params const *params_ptr) {
         return -1;
     }
 
+    pthread_mutex_init(&mutex, NULL);
+
     // create root inode
     int root = inode_create(T_DIRECTORY);
     if (root != ROOT_DIR_INUM) {
@@ -43,6 +53,9 @@ int tfs_destroy() {
     if (state_destroy() != 0) {
         return -1;
     }
+
+    pthread_mutex_destroy(&mutex);
+
     return 0;
 }
 
@@ -85,10 +98,17 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                   "tfs_open: root dir inode must exist");
+
+    //lock this portion of the function so that the file is not opened twice
+    LOCK;
+
     int inum = tfs_lookup(name, root_dir_inode);
     size_t offset;
 
     if (inum >= 0) {
+        // if the file already exists, the lock is released
+        UNLOCK;
+
         // The file already exists
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,
@@ -103,6 +123,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             else {
                 int status = add_to_open_file_table(inum, 0);
                 if (status == -1) {
+                    UNLOCK;
                     return -1;
                 }
                 char *target = malloc(sizeof(char) * inode->i_size);
@@ -130,17 +151,21 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // Create inode
         inum = inode_create(T_FILE);
         if (inum == -1) {
+            UNLOCK;
             return -1; // no space in inode table
         }
 
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
+            UNLOCK;
             inode_delete(inum);
             return -1; // no space in directory
         }
 
+        UNLOCK;
         offset = 0;
     } else {
+        UNLOCK;
         return -1;
     }
 
