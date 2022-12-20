@@ -132,7 +132,7 @@ int state_init(tfs_params params) {
     pthread_rwlock_init(&free_blocks_rwl, NULL);            // initialize free blocks lock
 
     for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
-        pthread_rwlock_init(&open_file_table[i].lock, NULL); // initialize locks for each open file entry
+        pthread_mutex_init(&open_file_table[i].lock, NULL); // initialize locks for each open file entry
         free_open_file_entries[i] = FREE;
     }
 
@@ -159,7 +159,7 @@ int state_destroy(void) {
     }
 
     for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
-        pthread_rwlock_destroy(&open_file_table[i].lock); // destroy locks
+        pthread_mutex_destroy(&open_file_table[i].lock); // destroy locks
     }
 
     //destroy all locks
