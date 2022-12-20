@@ -5,9 +5,20 @@
 #include <string.h>
 
 #define NUM_THREADS 4
-
+ char *str_ext_file =
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
+        "BBB! BBB! BBB! BBB! BBB! ";
+    char *path_copied_file = "/f1";
+    char *path_src = "tests/file_to_copy_over512.txt";
+    char buffer[600];
 // Function for the threads to run
-void *thread_func(char* path_copied_file, char* path_src, char* buffer, char *str_ext_file) {
+void *thread_func() {
 
 
     int f;
@@ -20,7 +31,6 @@ void *thread_func(char* path_copied_file, char* path_src, char* buffer, char *st
     assert(f != -1);
 
     r = tfs_read(f, buffer, sizeof(buffer) - 1);
-    fprintf(stderr, "leu %ld bytes do ficheiro depois de escrever lá o ext_file\n", r);
     assert(r == strlen(str_ext_file));
     assert(!memcmp(buffer, str_ext_file, strlen(str_ext_file)));
 
@@ -28,25 +38,14 @@ void *thread_func(char* path_copied_file, char* path_src, char* buffer, char *st
 }
 
 int main() {
-    char *str_ext_file =
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! "
-        "BBB! BBB! BBB! BBB! BBB! ";
-    char *path_copied_file = "/f1";
-    char *path_src = "tests/file_to_copy_over512.txt";
-    char buffer[600];
+   
 
     assert(tfs_init(NULL) != -1);
     pthread_t threads[NUM_THREADS];
 
     // Create and run threads
     for (int i = 0; i < NUM_THREADS; i++) {
-        int ret = pthread_create(&threads[i], NULL, thread_func(path_copied_file, path_src, buffer, str_ext_file), &i);
+        int ret = pthread_create(&threads[i], NULL, thread_func, NULL);
         assert(ret == 0);
     }
 
