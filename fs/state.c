@@ -403,7 +403,7 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
     }
 
     //lock the inode
-    //pthread_rwlock_wrlock(&inode_table[]); // <-- this is the line that needs to be changed
+    pthread_rwlock_wrlock(&inode_table[]); // <-- this is the line that needs to be changed
 
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
@@ -426,7 +426,7 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
     /*
     *           HERE
     */
-    //unlock the inode 
+    unlock the inode 
     return -1; // no space for entry
 }
 
