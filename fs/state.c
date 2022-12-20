@@ -396,7 +396,7 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
  *   - sub_name is not a valid file name (length 0 or > MAX_FILE_NAME - 1).
  *   - Directory is already full of entries.
  */
-int add_dir_entry(ino↑de_t *inode, char const *sub_name, int sub_inumber) {
+int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
     if (strlen(sub_name) == 0 || strlen(sub_name) > MAX_FILE_NAME - 1) {
         return -1; // invalid sub_name
     }
@@ -406,10 +406,8 @@ int add_dir_entry(ino↑de_t *inode, char const *sub_name, int sub_inumber) {
         return -1; // not a directory
     }
 
-    ↓ ve isto pls ↓ 
-
     //lock the inode
-    pthread_rwlock_wrlock(&inode_table[]); // <-- this is the line that needs to be changed
+    //pthread_rwlock_wrlock(&inode_table[]); // <-- this is the line that needs to be changed
 
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
@@ -459,7 +457,7 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
     }
 
     // lock the inode
-    pthread_rwlock_rdlock(&inode_table[]); // <-- this is the line that needs to be changed
+    //pthread_rwlock_rdlock(&inode_table[]); // <-- this is the line that needs to be changed
 
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
@@ -575,12 +573,12 @@ int add_to_open_file_table(int inumber, size_t offset) {
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (free_open_file_entries[i] == FREE) {
             free_open_file_entries[i] = TAKEN;
-            pthread_mutex_lock(&open_file_entries[i].lock);
+            pthread_mutex_lock(&open_file_table[i].lock);
             open_file_table[i].of_inumber = inumber;
             open_file_table[i].of_offset = offset;
             // unlock both locks
             pthread_mutex_unlock(&free_open_file_entries_mutex);
-            pthread_mutex_unlock(&open_file_entries[i].lock);
+            pthread_mutex_unlock(&open_file_table[i].lock);
             return i;
         }
     }
@@ -596,6 +594,13 @@ int add_to_open_file_table(int inumber, size_t offset) {
  *   - fhandle: file handle to free/close
  */
 void remove_from_open_file_table(int fhandle) {
+    // lock the free_open_file_entries
+    pthread_mutex_lock(&free_open_file_entries_mutex);
+
+    if (!valid_file_handle(fhandle)) {
+        pthread_mutex_unlock(&free_open_file_entries_mutex);
+        return;
+    }
     ALWAYS_ASSERT(valid_file_handle(fhandle),
                   "remove_from_open_file_table: file handle must be valid");
 
@@ -604,9 +609,8 @@ void remove_from_open_file_table(int fhandle) {
 
     free_open_file_entries[fhandle] = FREE;
 
-    /*
-    *           HERE
-    */
+    // unlock the free_open_file_entries
+    pthread_mutex_unlock(&free_open_file_entries_mutex);
 }
 
 /**
