@@ -188,7 +188,8 @@ int state_destroy(void) {
  *   - No free slots in inode table.
  */
 static int inode_alloc(void) {
-    pthread_rwlock_rdlock(&freeinode_ts_rwl);
+  
+
     for (size_t inumber = 0; inumber < INODE_TABLE_SIZE; inumber++) {
         if ((inumber * sizeof(allocation_state_t) % BLOCK_SIZE) == 0) {
             insert_delay(); // simulate storage access delay (to freeinode_ts)
@@ -229,6 +230,7 @@ static int inode_alloc(void) {
  */
 int inode_create(inode_type i_type) {
     pthread_rwlock_rdlock(&freeinode_ts_rwl); // lock free inode table
+   
     int inumber = inode_alloc();
     if (inumber == -1) {
         pthread_rwlock_unlock(&freeinode_ts_rwl); // unlock free inode table

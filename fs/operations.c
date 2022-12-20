@@ -37,7 +37,6 @@ int tfs_init(tfs_params const *params_ptr) {
     if (state_init(params) != 0) {
         return -1;
     }
-
     pthread_mutex_init(&mutex, NULL);
 
     // create root inode

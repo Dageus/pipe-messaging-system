@@ -12,9 +12,11 @@ int main() {
 
     assert(tfs_init(NULL) != -1);
 
-    int f;
-    ssize_t r;
+  
 
+    int f;
+
+    ssize_t r;
     f = tfs_copy_from_external_fs(path_src, path_copied_file);
     assert(f != -1);
 
