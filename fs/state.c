@@ -9,6 +9,10 @@
 #include <unistd.h>
 
 /*
+fix inode_delete and clear_dir_entry, not thread safe
+*/
+
+/*
  * Persistent FS state
  * (in reality, it should be maintained in secondary memory;
  * for simplicity, this project maintains it in primary memory).
@@ -377,6 +381,18 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
     return -1; // sub_name not found
 }
 
+//Function that gets the inumber of an inode given the inode
+int get_inumber(inode_t const *inode) {
+    for (int i = 0; i < INODE_TABLE_SIZE; i++) {
+        if (inode == &inode_table[i]) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+
+
 /**
  * Store the inumber for a sub file in a directory.
  *
@@ -393,9 +409,11 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
  *   - Directory is already full of entries.
  */
 int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
+
     if (strlen(sub_name) == 0 || strlen(sub_name) > MAX_FILE_NAME - 1) {
         return -1; // invalid sub_name
     }
+
 
     insert_delay(); // simulate storage access delay to inode with inumber
     if (inode->i_node_type != T_DIRECTORY) {
@@ -403,7 +421,12 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
     }
 
     //lock the inode
-    pthread_rwlock_wrlock(&inode_table[]); // <-- this is the line that needs to be changed
+    int inumber = get_inumber(inode);
+    if (inumber == -1) {
+        return -1;
+    }
+
+    pthread_rwlock_wrlock(&inode_locks[inumber]); 
 
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
@@ -419,14 +442,15 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
             strncpy(dir_entry[i].d_name, sub_name, MAX_FILE_NAME - 1);
             dir_entry[i].d_name[MAX_FILE_NAME - 1] = '\0';
 
+            pthread_rwlock_unlock(&inode_locks[inumber]);
+
             return 0;
         }
     }
     
-    /*
-    *           HERE
-    */
-    unlock the inode 
+    //unlock the inode 
+    pthread_rwlock_unlock(&inode_locks[inumber]);
+
     return -1; // no space for entry
 }
 
@@ -452,29 +476,32 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
         return -1; // not a directory
     }
 
-    // lock the inode
-    //pthread_rwlock_rdlock(&inode_table[]); // <-- this is the line that needs to be changed
-
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
     ALWAYS_ASSERT(dir_entry != NULL,
                   "find_in_dir: directory inode must have a data block");
+
+    //lock the inode
+    int inumber = get_inumber(inode);
+    if (inumber == -1) {
+        return -1;
+    }
+
+    pthread_rwlock_wrlock(&inode_locks[inumber]); 
 
     // Iterates over the directory entries looking for one that has the target
     // name
     for (int i = 0; i < MAX_DIR_ENTRIES; i++)
         if ((dir_entry[i].d_inumber != -1) &&
             (strncmp(dir_entry[i].d_name, sub_name, MAX_FILE_NAME) == 0)) {
-
             int sub_inumber = dir_entry[i].d_inumber;
+
+            pthread_rwlock_unlock(&inode_locks[inumber]);
+
             return sub_inumber;
         }
 
-    /*
-    *               HERE
-    */
-
-    //unlock the inode
+    pthread_rwlock_unlock(&inode_locks[inumber]);
     return -1; // entry not found
 }
 
@@ -532,7 +559,11 @@ void data_block_free(int block_number) {
 
     insert_delay(); // simulate storage access delay to free_blocks
 
+    // lock the free_blocks
+    pthread_rwlock_wrlock(&free_blocks_rwl);
     free_blocks[block_number] = FREE;
+    // unlock the free_blocks
+    pthread_rwlock_unlock(&free_blocks_rwl);
 }
 
 /**
