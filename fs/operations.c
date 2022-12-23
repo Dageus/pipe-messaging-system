@@ -10,7 +10,7 @@
 
 #include "betterassert.h"
 
-pthread_mutex_t g_library_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_library_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 tfs_params tfs_default_params() {
     tfs_params params = {

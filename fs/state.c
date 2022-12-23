@@ -281,6 +281,16 @@ inode_t *inode_get(int inumber) {
     return &inode_table[inumber];
 }
 
+//Function that gets the inumber of an inode given the inode
+int get_inumber(inode_t const *inode) {
+    for (int i = 0; i < INODE_TABLE_SIZE; i++) {
+        if (inode == &inode_table[i]) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /**
  * Clear the directory entry associated with a sub file.
  *
