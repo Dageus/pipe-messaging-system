@@ -6,16 +6,57 @@
 #include <stdlib.h>
 
 typedef struct {
-    u_int8_t code;
+    u_int8_t code;                       // code = 1
     char client_named_pipe_path[256];
     char box_name[32];
 } publisher_register;
 
 typedef struct {
-    u_int8_t code;
+    u_int8_t code;                       // code = 2
     char client_named_pipe_path[256];
     char box_name[32];
 } subscriber_register;
+
+typedef struct {
+    u_int8_t code;                       // code = 3
+    char client_named_pipe_path[256];
+    char box_name[32];
+} box_request;
+
+typedef struct {
+    u_int8_t code;                       // code = 4
+    int32_t return_code;                 // 0 = success, -1 = error
+    char error_message[1024];            // if return_code == -1 sends message, else send empty string
+} box_request_response;
+
+typedef struct {
+    u_int8_t code;                       // code = 5
+    char client_named_pipe_path[256];
+    char box_name[32];
+} box_removal;
+
+typedef struct {
+    u_int8_t code;                       // code = 6
+    int32_t return_code;                 // 0 = success, -1 = error
+    char error_message[1024];            // if return_code == -1 sends message, else send empty string
+} box_removal_response;
+
+typedef struct {
+    u_int8_t code;                       // code = 7
+    char client_named_pipe_path[256];
+    char box_name[32];
+} box_list_request;
+
+typedef struct {
+    u_int8_t code;                       // code = 8
+    u_int8_t return_code;                // 1 if it´s the last box, 0 if there are more boxes
+    char box_name[32];                   // if return_code == 1 sends message, else send empty string
+    u_int64_t box_size;                  // size of the box
+    u_int64_t n_publishers;              // number of messages in the box
+    u_int64_t n_subscribers;             // number of subscribers
+} box_list_message;
+
+// additional structs
 
 typedef struct {
     u_int8_t code;
@@ -27,23 +68,7 @@ typedef struct {
     char message[1024]; 
 } subscriber_message;
 
-typedef struct {
-    u_int8_t code;
-    char client_named_pipe_path[256];
-    char box_name[32];
-} box_request;
 
-typedef struct {
-    u_int8_t code;
-    int32_t return_code; // 0 = success, -1 = error
-    char error_message[1024]; // if return_code == -1 sends message, else send empty string
-} box_response;
-
-typedef struct {
-    u_int8_t code;
-    char client_named_pipe_path[256];
-    char box_name[32];
-} box_removal;
 
 // Structure to hold the state of a subscriber client
 typedef struct {
