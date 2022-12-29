@@ -9,19 +9,13 @@
 #include <sys/select.h>
 #include <fcntl.h>
 #include <errno.h>
+#include "structures.h"
 
 #define MAX_MESSAGE_SIZE 1024
 
-// Structure to hold the state of a subscriber client
-typedef struct {
-  int server_fd; // File descriptor for the connection to the mbroker server
-  int client_fd; // File descriptor for the client's named pipe
-  char message_box[256]; // Name of the message box the client is subscribed to
-} subscriber_t;
-
 // Function prototypes
 int subscriber_connect(subscriber_t *subscriber, const char *server_pipe, const char *client_pipe);
-int subscriber_subscribe(subscriber_t *subscriber, const char *message_box);
+int subscriber_subscribe(subscriber_t *subscriber, const char *box_name);
 int subscriber_receive(subscriber_t *subscriber, char *buffer, size_t size);
 int subscriber_disconnect(subscriber_t *subscriber);
 
@@ -52,16 +46,16 @@ int subscriber_connect(subscriber_t *subscriber, const char *server_pipe, const 
 }
 
 // Implementation of the subscriber_subscribe function
-int subscriber_subscribe(subscriber_t *subscriber, const char *message_box) {
+int subscriber_subscribe(subscriber_t *subscriber, const char *box_name) {
     // Send a message to the mbroker server requesting to subscribe to the message box
     if (write(subscriber->server_fd, "SUBSCRIBE", 10) < 0 ||
-        write(subscriber->server_fd, message_box, strlen(message_box) + 1) < 0) {
+        write(subscriber->server_fd, box_name, strlen(box_name) + 1) < 0) {
         perror("Error writing to named pipe");
         return -1;
     }
 
         // Save the name of the message box in the subscriber structure
-        strncpy(subscriber->message_box, message_box, sizeof(subscriber->message_box));
+        strncpy(subscriber->box_name, box_name, sizeof(subscriber->box_name));
 
     return 0;
 }
@@ -90,8 +84,6 @@ int subscriber_receive(subscriber_t *subscriber, char *buffer, size_t size) {
 
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
     fprintf(stderr, "usage: sub <register_pipe_name> <box_name>\n");
     WARN("unimplemented"); // TODO: implement
     return -1;

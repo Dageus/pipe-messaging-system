@@ -1,4 +1,15 @@
 #include "logging.h"
+#include <stdlib.h>
+
+/*
+    pipes work as files, use open to read whats in them, and write to them
+
+
+    
+
+*/
+
+
 
 int main(int argc, char **argv) {
     (void)argc;

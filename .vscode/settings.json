@@ -3,6 +3,7 @@
         "betterassert.h": "c",
         "assert.h": "c",
         "string.h": "c",
-        "operations.h": "c"
+        "operations.h": "c",
+        "logging.h": "c"
     }
 }
