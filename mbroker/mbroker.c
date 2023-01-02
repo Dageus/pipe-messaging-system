@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/*
+ * a session remains open until either:
+ *      - the publisher or subscriber closes the pipe
+ *      - a box is removed from the manager 
+ */
+
 
 
 int main(int argc, char **argv) {
@@ -104,8 +110,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed: unknown command '%s'\n", command);
     }
 
-    char *pipe_name = argv[0]; // name of the named pipe
-    int max_sessions = atoi(argv[1]); // number of threads to be created
     WARN("unimplemented"); // TODO: implement
     return -1;
 }

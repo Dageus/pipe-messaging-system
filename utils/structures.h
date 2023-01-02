@@ -69,7 +69,6 @@ typedef struct {
 } subscriber_message;
 
 
-
 // Structure to hold the state of a subscriber client
 typedef struct {
   int server_fd; // File descriptor for the connection to the mbroker server
@@ -86,8 +85,14 @@ typedef struct {
 
 typedef struct {
     publisher_t *publisher;
-    // TODO: Add list of subscriber_t
+    // TODO: Add list of subscriber_t -> use linked list
     publisher_message *message;
 } box_t;
+
+// Structure to hold the state of the mbroker server
+typedef struct {
+  char* pipe_path;       // Path to the server's named pipe
+  u_int8_t max_sessions; // Maximum number of concurrent sessions
+} mbroker_t;
 
 #endif
