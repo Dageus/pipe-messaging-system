@@ -22,17 +22,30 @@
 /*
  * returns 0 on success, -1 on failure
 */
-int pub_to_box(char *box_name) {
+int pub_to_box(char* named_pipe, char *box_name) {
     // open box_name
     // write to box_name
     // close box_name
     return 0;
 }
 
+/*
+ * format:
+ *  - pub <register_pipe_name> <box_name>
+ */
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    fprintf(stderr, "usage: pub <register_pipe_name> <box_name>\n");
+    if (argc != 3) {
+        fprintf(stderr, "failed: not enough arguments\n");
+        return -1;
+    }
+
+    char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the publisher wants to connect to
+    char *box_name = argv[2];           // box_name is the name of the box to which the publisher wants to publish to
+
+    pub_to_box(register_pipe_name, box_name);
+
+    // more functions might be needed
+
     WARN("unimplemented"); // TODO: implement
     return -1;
 }
