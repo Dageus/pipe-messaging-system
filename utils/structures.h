@@ -21,19 +21,19 @@ typedef struct {
     u_int8_t code;                       // code = 3
     char client_named_pipe_path[256];
     char box_name[32];
-} box_request;
+} box_creation_request;
 
 typedef struct {
     u_int8_t code;                       // code = 4
     int32_t return_code;                 // 0 = success, -1 = error
     char error_message[1024];            // if return_code == -1 sends message, else send empty string
-} box_request_response;
+} box_creation_response;
 
 typedef struct {
     u_int8_t code;                       // code = 5
     char client_named_pipe_path[256];
     char box_name[32];
-} box_removal;
+} box_removal_request;
 
 typedef struct {
     u_int8_t code;                       // code = 6
@@ -44,7 +44,6 @@ typedef struct {
 typedef struct {
     u_int8_t code;                       // code = 7
     char client_named_pipe_path[256];
-    char box_name[32];
 } box_list_request;
 
 typedef struct {

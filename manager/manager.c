@@ -42,8 +42,12 @@ int list_boxes(char* named_pipe) {
     // list boxes in mbroker
     box_list_request request = {
         .code = 1,
-
+        .client_named_pipe_path = named_pipe
     };
+
+    // send this to the mbroker through the named pipe
+
+    // receive the answer from the mbroker through the named pipe
     return 0;
 }
 
@@ -52,6 +56,15 @@ int list_boxes(char* named_pipe) {
 */
 int create_box(char *named_pipe, char *box_name) {
     // create box in mbroker
+    box_creation_request request = {
+        .code = 2,
+        .box_name = box_name,
+        .client_named_pipe_path = named_pipe
+    };
+
+    // send this to the mbroker through the named pipe
+
+    // receive the answer from the mbroker through the named pipe
     return 0;
 }
 
@@ -60,6 +73,15 @@ int create_box(char *named_pipe, char *box_name) {
 */
 int remove_box(char *named_pipe, char *box_name) {
     // remove box from mbroker
+    box_removal_request request = {
+        .code = 3,
+        .box_name = box_name,
+        .client_named_pipe_path = named_pipe
+    };
+
+    // send this to the mbroker through the named pipe
+
+    // receive the answer from the mbroker through the named pipe
     return 0;
 }
 
