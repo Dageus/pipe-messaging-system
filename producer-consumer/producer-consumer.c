@@ -9,7 +9,6 @@ int pcq_enqueue(pc_queue_t *queue, void *elem);
 void *pcq_dequeue(pc_queue_t *queue);
 
 // new functions
-
 void subscriber_message(const char* message) {
     fprintf(stdout, "%s\n", message);
 }

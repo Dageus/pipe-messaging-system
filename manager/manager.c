@@ -1,12 +1,7 @@
 #include "logging.h"
 #include "structures.h"
+#include <stdio.h>
 
-static void print_usage() {
-    fprintf(stderr, "usage: \n"
-                    "   manager <register_pipe_name> create <box_name>\n"
-                    "   manager <register_pipe_name> remove <box_name>\n"
-                    "   manager <register_pipe_name> list\n");
-}
 
 #define CLIENT_PIPE_PATH "/tmp/client_pipe_"
 
@@ -30,7 +25,7 @@ int client_pipe_num = 1;
  */
 
 
-//
+// delete structures.h
 
 // manager creates named pipe for register
 
@@ -40,11 +35,6 @@ int client_pipe_num = 1;
 */
 int list_boxes(char* named_pipe) {
     // list boxes in mbroker
-    box_list_request request = {
-        .code = 1,
-        .client_named_pipe_path = named_pipe
-    };
-
     // send this to the mbroker through the named pipe
 
     // receive the answer from the mbroker through the named pipe
@@ -55,12 +45,12 @@ int list_boxes(char* named_pipe) {
  * returns 0 on success, -1 on failure
 */
 int create_box(char *named_pipe, char *box_name) {
-    // create box in mbroker
-    box_creation_request request = {
-        .code = 2,
-        .box_name = box_name,
-        .client_named_pipe_path = named_pipe
-    };
+    // create box in mbroker´
+
+    //
+
+    // example:
+    //open(CLIENT_PIPE_PATH, O_RDONLY)
 
     // send this to the mbroker through the named pipe
 
@@ -73,17 +63,15 @@ int create_box(char *named_pipe, char *box_name) {
 */
 int remove_box(char *named_pipe, char *box_name) {
     // remove box from mbroker
-    box_removal_request request = {
-        .code = 3,
-        .box_name = box_name,
-        .client_named_pipe_path = named_pipe
-    };
 
     // send this to the mbroker through the named pipe
 
     // receive the answer from the mbroker through the named pipe
     return 0;
 }
+
+
+// register pipe name is the name of the pipe to which the manager wants to connect to
 
 /*
  * format: 
