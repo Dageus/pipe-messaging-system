@@ -5,6 +5,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define CLIENT_PIPE_PATH "/tmp/client_pipe_"
+#define SERVER_PIPE_PATH "/tmp/server_pipe"
+#define BOX_MESSAGE_SIZE 296
+#define BOX_LIST_MESSAGE_SIZE 264
+
+int client_pipe_num = 1;
+
+char* create_client_pipe_path() {
+    char* client_pipe_path = malloc(sizeof(CLIENT_PIPE_PATH) + sizeof(client_pipe_num));
+    sprintf(client_pipe_path, "%s%d", CLIENT_PIPE_PATH, client_pipe_num++);
+    return client_pipe_path;
+}
+
+char* get_client_pipe_path() {
+    char* client_pipe_path = malloc(sizeof(CLIENT_PIPE_PATH) + sizeof(client_pipe_num));
+    memcpy(client_pipe_path, CLIENT_PIPE_PATH, sizeof(CLIENT_PIPE_PATH));
+    memcpy(client_pipe_path + sizeof(CLIENT_PIPE_PATH), &client_pipe_num, sizeof(client_pipe_num));
+    client_pipe_num++;
+    return client_pipe_path;
+}
+
 typedef struct {
     u_int8_t code;                       // code = 1
     char client_named_pipe_path[256];

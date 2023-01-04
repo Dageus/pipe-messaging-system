@@ -1,5 +1,13 @@
 #include "logging.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 
 /*
  * - the subscriber connects to the mbroker, citing the box name it wants to subscribe to
@@ -42,6 +50,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
     }
+ 
+   // use select here to wait for input from stdin and the named pipe
 
     char* register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the subscriber wants to connect to
     char* box_name = argv[2];           // box_name is the name of the box to which the subscriber wants to subscribe to

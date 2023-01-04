@@ -4,6 +4,10 @@
         "assert.h": "c",
         "string.h": "c",
         "operations.h": "c",
-        "logging.h": "c"
+        "logging.h": "c",
+        "stdio.h": "c",
+        "structures.h": "c",
+        "unistd.h": "c",
+        "fcntl.h": "c"
     }
 }

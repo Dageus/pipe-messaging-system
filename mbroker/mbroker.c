@@ -9,6 +9,7 @@
  *      - a box is removed from the manager 
  */
 
+// register_pipe_name is the name of the pipe that mbroker controls
 
 /*
  * format:
@@ -19,6 +20,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
     }
+
+    // use
+    // while (true) {
+        // use select() to wait for input from the register pipe
+        // if input is received, create a new session or box or whatever
+        
 
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
     int max_sessions = atoi(argv[2]);   // max_sessions is the maximum number of sessions that can be open at the same time

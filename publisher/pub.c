@@ -23,9 +23,10 @@
  * returns 0 on success, -1 on failure
 */
 int pub_to_box(char* named_pipe, char *box_name) {
-    // open box_name
-    // write to box_name
-    // close box_name
+    // IMPORTANT 
+    // use tfsopen to open the box
+    // use tfswrite to write to the box
+    // use tfsclose to close the box
     return 0;
 }
 
@@ -38,6 +39,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
     }
+
+
 
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the publisher wants to connect to
     char *box_name = argv[2];           // box_name is the name of the box to which the publisher wants to publish to
