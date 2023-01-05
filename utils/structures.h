@@ -12,6 +12,8 @@
 
 int client_pipe_num = 1;
 
+
+
 char* create_client_pipe_path() {
     char* client_pipe_path = malloc(sizeof(CLIENT_PIPE_PATH) + sizeof(client_pipe_num));
     sprintf(client_pipe_path, "%s%d", CLIENT_PIPE_PATH, client_pipe_num++);
@@ -25,6 +27,16 @@ char* get_client_pipe_path() {
     client_pipe_num++;
     return client_pipe_path;
 }
+
+typedef struct {
+    int max_sessions;
+    char* register_pipe_path;
+} mbroker_t;
+
+typedef struct {
+    char* box_name;
+    
+} box_t;
 
 typedef struct {
     u_int8_t code;                       // code = 1
@@ -105,14 +117,14 @@ typedef struct {
 
 typedef struct {
     publisher_t *publisher;
-    // TODO: Add list of subscriber_t -> use linked list
+    subscriber_t *subscriber;
     publisher_message *message;
 } box_t;
 
 // Structure to hold the state of the mbroker server
 typedef struct {
-  char* pipe_path;       // Path to the server's named pipe
-  u_int8_t max_sessions; // Maximum number of concurrent sessions
+  char* pipe_path;          // Path to the server's named pipe
+  int max_sessions;         // Maximum number of concurrent sessions
 } mbroker_t;
 
 #endif

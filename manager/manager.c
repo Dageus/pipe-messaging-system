@@ -158,8 +158,8 @@ int remove_box(char *named_pipe, char *box_name) {
 
 // register pipe name is the name of the pipe to which the manager wants to connect to
 
-// SUPER IMPORTANT:
-// CREATE STRUCTS TO STORE ESSENTIAL INFORMATION ABOUT THE MANAGER
+// IMPORTANT:
+//      CREATE STRUCTS TO STORE ESSENTIAL INFORMATION ABOUT THE MANAGER
 
 /*
  * format: 
@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
     if (argc < 4) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
-    }
+    }    
 
     char *register_pipe_name = argv[1]; // assign the register pipe name
     char *pipe_name = argv[2];          // assign the pipe name

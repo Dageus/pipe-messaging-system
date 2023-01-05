@@ -1,4 +1,12 @@
 #include "logging.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 
 
@@ -40,6 +48,8 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    // use
+    // select here to wait for input from stdin and the named pipe
 
 
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the publisher wants to connect to
