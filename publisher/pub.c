@@ -48,16 +48,33 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    // use
-    // select here to wait for input from stdin and the named pipe
-
 
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the publisher wants to connect to
     char *box_name = argv[2];           // box_name is the name of the box to which the publisher wants to publish to
 
-    pub_to_box(register_pipe_name, box_name);
+   int pipe_fd = open("/path/to/named_pipe", O_RDONLY);
+    if (pipe_fd < 0) {
+        perror("open");
+        return -1;
+    }
 
-    // more functions might be needed
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
+
+    while (true) {
+        // wait for data to be available on the named pipe
+        
+        if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
+            fprintf(stderr, "failed: could not check for pipe input\n");
+            return -1;
+        }
+ 
+        // if input is a message, process the message
+
+        // if input is an EOF, close the session
+    
+    }
 
     WARN("unimplemented"); // TODO: implement
     return -1;

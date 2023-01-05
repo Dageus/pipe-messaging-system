@@ -4,17 +4,13 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#define CLIENT_PIPE_PATH "/tmp/client_pipe_"
-
-int client_pipe_num = 1;
 
 /*
 returns 0 on success, -1 on failure
 */
 int create_box(char *box_name) {
     char client_pipe_name[256];
-    sprintf(client_pipe_name, "%s%d", CLIENT_PIPE_PATH, client_pipe_num++);
-
+    
     // create the named pipe
     if (mkfifo(client_pipe_name, 0666) < 0) {
         perror("mkfifo");

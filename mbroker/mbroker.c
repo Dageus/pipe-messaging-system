@@ -1,6 +1,8 @@
 #include "logging.h"
 #include "structures.h"
 #include "messages.h"
+#include "operations.h"
+#include "state.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,13 +38,19 @@ int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
         } else {
             // data is available on the named pipe
             // read the data from the pipe
-            char buffer[1024];
+            char buffer[MAX_MESSAGE_SIZE];
             ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
             if (num_bytes < 0) {
                 perror("read");
                 return -1;
             } else {
-                // process the data that was read from the pipe
+                // typecast buffer[0] to u_int8_t
+                u_int8_t code = (u_int8_t) buffer[0]; // code is the first byte of the message
+                // check if the code is valid
+
+                // use switch case to handle the message depending on the code   
+                
+                return code;
             }
         }
 }
@@ -53,7 +61,7 @@ int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
  */
 int main(int argc, char **argv) {
 
-    // initialize tfs in mbroker
+    tfs_init(NULL);
 
     if (argc != 3) {
         fprintf(stderr, "failed: not enough arguments\n");
@@ -79,6 +87,10 @@ int main(int argc, char **argv) {
         if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
+        }
+        if (check_for_pipe_input(pipe_fd, read_fds) == 5){
+            // close the session
+            return 0;
         }
  
         // if input is a message, process the message

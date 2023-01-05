@@ -9,24 +9,7 @@
 #define SERVER_PIPE_PATH "/tmp/server_pipe"
 #define BOX_MESSAGE_SIZE 296
 #define BOX_LIST_MESSAGE_SIZE 264
-
-int client_pipe_num = 1;
-
-
-
-char* create_client_pipe_path() {
-    char* client_pipe_path = malloc(sizeof(CLIENT_PIPE_PATH) + sizeof(client_pipe_num));
-    sprintf(client_pipe_path, "%s%d", CLIENT_PIPE_PATH, client_pipe_num++);
-    return client_pipe_path;
-}
-
-char* get_client_pipe_path() {
-    char* client_pipe_path = malloc(sizeof(CLIENT_PIPE_PATH) + sizeof(client_pipe_num));
-    memcpy(client_pipe_path, CLIENT_PIPE_PATH, sizeof(CLIENT_PIPE_PATH));
-    memcpy(client_pipe_path + sizeof(CLIENT_PIPE_PATH), &client_pipe_num, sizeof(client_pipe_num));
-    client_pipe_num++;
-    return client_pipe_path;
-}
+#define MAX_MESSAGE_SIZE 1024
 
 typedef struct {
     int max_sessions;
@@ -116,9 +99,9 @@ typedef struct {
 } publisher_t;
 
 typedef struct {
-    publisher_t *publisher;
-    subscriber_t *subscriber;
-    publisher_message *message;
+    publisher_t* publisher;
+    subscriber_t* *subscribers;
+    publisher_message* message;
 } box_t;
 
 // Structure to hold the state of the mbroker server
