@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/select.h>
+#include <errno.h>
 
 /*
  * a session remains open until either:
@@ -40,19 +41,34 @@ int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
             // read the data from the pipe
             char buffer[MAX_MESSAGE_SIZE];
             ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
-            if (num_bytes < 0) {
-                perror("read");
-                return -1;
-            } else {
-                // typecast buffer[0] to u_int8_t
-                u_int8_t code = (u_int8_t) buffer[0]; // code is the first byte of the message
-                // check if the code is valid
-
-                // use switch case to handle the message depending on the code   
-                
-                return code;
+            if (num_bytes == 0) {
+                // num_bytes == 0 indicates EOF
+                fprintf(stderr, "[INFO]: pipe closed\n");
+                return 0;
+            } else if (num_bytes == -1) {
+                // num_bytes == -1 indicates error
+                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
             }
         }
+}
+
+int create_box(char *box_name) {
+    // check if box already exists
+    if (box_exists(box_name)) {
+        fprintf(stderr, "failed: box already exists\n");
+        return -1;
+    }
+
+    // create box
+    if (create_new_box(box_name) < 0) {
+        fprintf(stderr, "failed: could not create box\n");
+        return -1;
+    }
+
+    tfs_open(box_name, O_CREAT); // how to create box
+
+    return 0;
 }
 
 /*
@@ -61,7 +77,10 @@ int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
  */
 int main(int argc, char **argv) {
 
-    tfs_init(NULL);
+    if (tfs_init(NULL) < 0) {
+        fprintf(stderr, "failed: could not initialize tfs\n");
+        return -1;
+    }
 
     if (argc != 3) {
         fprintf(stderr, "failed: not enough arguments\n");
@@ -97,6 +116,11 @@ int main(int argc, char **argv) {
 
         // if input is an EOF, close the session
     
+    }
+
+    if (tfs_destroy() < 0) {
+        fprintf(stderr, "failed: could not destroy tfs\n");
+        return -1;
     }
 
     WARN("unimplemented"); // TODO: implement

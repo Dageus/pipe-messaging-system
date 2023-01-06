@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "structures.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,6 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/select.h>
+#include <errno.h>
 
 
 /*
@@ -27,6 +30,28 @@
  * - the named pipe must be removed when the subscriber exits
  *
 */
+
+int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
+    int ret = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+        if (ret < 0) {
+            perror("select");
+            return -1;
+        } else {
+            // data is available on the named pipe
+            // read the data from the pipe
+            char buffer[MAX_MESSAGE_SIZE];
+            ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
+            if (num_bytes == 0) {
+                // num_bytes == 0 indicates EOF
+                fprintf(stderr, "[INFO]: pipe closed\n");
+                return 0;
+            } else if (num_bytes == -1) {
+                // num_bytes == -1 indicates error
+                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+        }
+}
 
 
 /*
