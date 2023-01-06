@@ -90,7 +90,19 @@ int main(int argc, char **argv) {
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
     max_sessions = atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
 
-    int pipe_fd = open("/path/to/named_pipe", O_RDONLY);
+
+    // unlink register_pipe_name if it already exists
+    if (unlink(register_pipe_name) < 0) {
+        perror("unlink");
+        return -1;
+    }
+    // create the named pipe
+    if (mkfifo(register_pipe_name, 0666) < 0) {
+        perror("mkfifo");
+        return -1;
+    }
+
+    int pipe_fd = open(register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
         perror("open");
         return -1;
@@ -111,10 +123,6 @@ int main(int argc, char **argv) {
             // close the session
             return 0;
         }
- 
-        // if input is a message, process the message
-
-        // if input is an EOF, close the session
     
     }
 

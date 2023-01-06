@@ -39,8 +39,16 @@ int pub_to_box(char* named_pipe, char *box_name) {
 }
 
 /*
+ * returns 0 on success, -1 on failure
+*/
+int join_box(char* named_pipe, char *box_name) {
+
+    return 0;
+}
+
+/*
  * format:
- *  - pub <register_pipe_name> <box_name>
+ *  - pub <register_pipe_name> <pipe_name> <box_name>
  */
 int main(int argc, char **argv) {
     if (argc != 3) {
@@ -48,11 +56,22 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the publisher wants to connect to
-    char *box_name = argv[2];           // box_name is the name of the box to which the publisher wants to publish to
+    char *pipe_name = argv[2];          // pipe_name is the name of the pipe to which the publisher wants to write to
+    char *box_name = argv[3];           // box_name is the name of the box to which the publisher wants to publish to
 
-   int pipe_fd = open("/path/to/named_pipe", O_RDONLY);
+    if (mkfifo(pipe_name, 0666) == -1) {
+        fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
+        return -1;
+    }
+
+    // send request to mbroker to join the server
+    if (join_box(register_pipe_name, box_name) < 0) {
+        fprintf(stderr, "failed: could not join box\n");
+        return -1;
+    }
+
+    int pipe_fd = open("/path/to/named_pipe", O_RDONLY);
     if (pipe_fd < 0) {
         perror("open");
         return -1;
@@ -63,8 +82,8 @@ int main(int argc, char **argv) {
     FD_SET(pipe_fd, &read_fds);
 
     while (true) {
-        // wait for data to be available on the named pipe
-        
+        // wait for input from user in stdin
+
         if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
@@ -76,6 +95,8 @@ int main(int argc, char **argv) {
     
     }
 
-    WARN("unimplemented"); // TODO: implement
-    return -1;
+    // close the named pipe
+    close(pipe_fd);
+
+    return 0;
 }

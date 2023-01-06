@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <signal.h>
 
 
 /*
@@ -30,6 +31,13 @@
  * - the named pipe must be removed when the subscriber exits
  *
 */
+
+int messages_received = 0;  // number of messages received by the subscriber
+int interrupted = 0;        // flag to track if the program has been interrupted
+
+void sigint_handler(int sig) {
+    interrupted = 1;
+}
 
 int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
     int ret = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
@@ -76,7 +84,9 @@ int main(int argc, char **argv) {
         return -1;
     }
  
-   // use select here to wait for input from stdin and the named pipe
+    signal(SIGINT, sigint_handler); // register the SIGINT handler
+
+    // use select here to wait for input from stdin and the named pipe
 
     char* register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the subscriber wants to connect to
     char* box_name = argv[2];           // box_name is the name of the box to which the subscriber wants to subscribe to
@@ -91,7 +101,7 @@ int main(int argc, char **argv) {
     FD_ZERO(&read_fds);
     FD_SET(pipe_fd, &read_fds);
 
-    while (true) {
+    while (!interrupted) {
         // wait for data to be available on the named pipe
         
         if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
@@ -105,6 +115,11 @@ int main(int argc, char **argv) {
     
     }
 
-    WARN("unimplemented"); // TODO: implement
+    // close the named pipe
+    close(pipe_fd);
+
+    // print the number of messages received
+    fprintf(stdout, "received %d messages\n", messages_received);
+
     return -1;
 }

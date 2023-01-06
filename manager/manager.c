@@ -5,6 +5,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <sys/select.h>
 
 // pipe path format: /tmp/client_pipe_<num>
 
@@ -23,23 +28,35 @@
  * - to remove a pipe use the function unlink(<path>)
  */
 
-
-// delete structures.h
-
 // manager creates named pipe for register
 
+int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
+    int ret = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+        if (ret < 0) {
+            perror("select");
+            return -1;
+        } else {
+            // data is available on the named pipe
+            // read the data from the pipe
+            char buffer[MAX_MESSAGE_SIZE];
+            ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
+            if (num_bytes == 0) {
+                // num_bytes == 0 indicates EOF
+                fprintf(stderr, "[INFO]: pipe closed\n");
+                return 0;
+            } else if (num_bytes == -1) {
+                // num_bytes == -1 indicates error
+                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+        }
+}
 
 /*
  * returns 0 on success, -1 on failure
  */
 int list_boxes(char* named_pipe) {
     // list boxes in mbroker
-
-    // create the pipe
-    if (mkfifo(named_pipe, 0666) == -1) {
-        fprintf(stderr, "failed: could not create pipe: %s\n", named_pipe);
-        return -1;
-    }
 
     // open the pipe
     int pipe_fd = open(named_pipe, O_WRONLY);
@@ -81,33 +98,26 @@ char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, int 
 */
 int create_box_request(char *named_pipe, char *box_name) {
     // use memcpy to copy the CLIENT_PIPE_PATH + client_pipe_num to the client_pipe_name
-    char *client_pipe_name = get_client_pipe_path(); // this isnt right
-
-    // create the pipe
-    if (mkfifo(client_pipe_name, 0666) == -1) {
-        fprintf(stderr, "failed: could not create pipe: %s\n", client_pipe_name);
-        return -1;
-    }
 
     // open the pipe
-    int pipe_fd = open(client_pipe_name, O_WRONLY);
+    int pipe_fd = open(named_pipe, O_WRONLY);
     if (pipe_fd < 0) {
-        fprintf(stderr, "failed: could not open pipe: %s\n", client_pipe_name);
+        fprintf(stderr, "failed: could not open pipe: %s\n", named_pipe);
         return -1;
     }
     
     // send the create command and the box name to the mbroker through the pipe
-    char *message = create_message(3, client_pipe_name, box_name, BOX_MESSAGE_SIZE);
+    char *message = create_message(3, named_pipe, box_name, BOX_MESSAGE_SIZE);
 
     // send this to the mbroker through the named pipe
     if (write(pipe_fd, message, sizeof(message)) < 0) {
-        fprintf(stderr, "failed: could not write to pipe: %s\n", client_pipe_name);
+        fprintf(stderr, "failed: could not write to pipe: %s\n", named_pipe);
         return -1;
     }
 
     // close the pipe
     if (close(pipe_fd) == -1) {
-        fprintf(stderr, "failed: could not close pipe: %s\n", client_pipe_name);
+        fprintf(stderr, "failed: could not close pipe: %s\n", named_pipe);
         return -1;
     }
 
@@ -120,33 +130,26 @@ int create_box_request(char *named_pipe, char *box_name) {
 */
 int remove_box(char *named_pipe, char *box_name) {
    // use memcpy to copy the CLIENT_PIPE_PATH + client_pipe_num to the client_pipe_name
-    char *client_pipe_name = get_client_pipe_path(); // this isnt right
-
-    // create the pipe
-    if (mkfifo(client_pipe_name, 0666) == -1) {
-        fprintf(stderr, "failed: could not create pipe: %s\n", client_pipe_name);
-        return -1;
-    }
 
     // open the pipe
-    int pipe_fd = open(client_pipe_name, O_WRONLY);
+    int pipe_fd = open(named_pipe, O_WRONLY);
     if (pipe_fd < 0) {
-        fprintf(stderr, "failed: could not open pipe: %s\n", client_pipe_name);
+        fprintf(stderr, "failed: could not open pipe: %s\n", named_pipe);
         return -1;
     }
     
     // send the create command and the box name to the mbroker through the pipe
-    char *message = create_message(5, client_pipe_name, box_name, BOX_MESSAGE_SIZE);
+    char *message = create_message(5, named_pipe, box_name, BOX_MESSAGE_SIZE);
 
     // send this to the mbroker through the named pipe
     if (write(pipe_fd, message, sizeof(message)) < 0) {
-        fprintf(stderr, "failed: could not write to pipe: %s\n", client_pipe_name);
+        fprintf(stderr, "failed: could not write to pipe: %s\n", named_pipe);
         return -1;
     }
 
     // close the pipe
     if (close(pipe_fd) == -1) {
-        fprintf(stderr, "failed: could not close pipe: %s\n", client_pipe_name);
+        fprintf(stderr, "failed: could not close pipe: %s\n", named_pipe);
         return -1;
     }
 
@@ -178,6 +181,11 @@ int main(int argc, char **argv) {
     char *pipe_name = argv[2];          // assign the pipe name
     char *command = argv[3];            // assign the command
 
+    if (mkfifo(pipe_name, 0666) == -1) {
+        fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
+        return -1;
+    }
+
     if (argc > 4){                      // this means we're either creating or removing a box
         char *box_name = argv[4];
         if (strcmp(command, "create") == 0) {
@@ -189,7 +197,26 @@ int main(int argc, char **argv) {
         list_boxes(register_pipe_name);
     }
 
-    // more functions might be needed
+    int pipe_fd = open(pipe_name, O_RDONLY);
+    if (pipe_fd < 0) {
+        fprintf(stderr, "failed: could not open pipe: %s\n", pipe_name);
+        return -1;
+    }
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
+
+    while (true){
+         // wait for data to be available on the named pipe
+        
+        if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
+            fprintf(stderr, "failed: could not check for pipe input\n");
+            return -1;
+        }
+
+        // actual code
+    }
 
     WARN("unimplemented"); // TODO: implement
     return -1;
