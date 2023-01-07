@@ -20,10 +20,9 @@
  *      - a box is removed from the manager 
  */
 
-// register_pipe_name is the name of the pipe that mbroker controls
+mbroker_t *mbroker;
 
-int current_sessions = 0;   // number of sessions currently open
-int max_sessions;           // maximum number of sessions that can be open at the same time
+box_t *box;
 
 // array to keep track of the sessions
 
@@ -31,42 +30,115 @@ int max_sessions;           // maximum number of sessions that can be open at th
 
 // array to keep track of the boxes
 
-int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
-    int ret = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
-        if (ret < 0) {
-            perror("select");
-            return -1;
-        } else {
-            // data is available on the named pipe
-            // read the data from the pipe
-            char buffer[MAX_MESSAGE_SIZE];
-            ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
-            if (num_bytes == 0) {
-                // num_bytes == 0 indicates EOF
-                fprintf(stderr, "[INFO]: pipe closed\n");
-                return 0;
-            } else if (num_bytes == -1) {
-                // num_bytes == -1 indicates error
-                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
+// IMPORTANT: 
+// - functions to implement yet:
+
+int find_box();
+
+
+
+// completed code: 
+
+int read_pipe_input(int pipe_fd, fd_set read_fds) {
+    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+    if (sel < 0) {
+        return -1;
+    } else {
+        // data is available on the named pipe
+        // read the data from the pipe
+        u_int8_t code;
+        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
         }
+
+        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
+        fprintf(stdout, "[INFO]: code: %d\n", code);
+
+        if (process_command(pipe_fd, read_fds, code) < 0) {
+            return -1;
+        }
+
+    }
+}
+
+int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
+    // read the message from the pipe
+    switch (code)
+    {
+    case 1:         // register a publisher
+        char message[1024];
+        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+        if (num_bytes < 0) {
+            perror("read");
+            return -1;
+        }
+        break;
+    case 2:                 // register a subscriber
+        /* code */
+        break;
+    case 3:                 // create a box
+        /* code */
+        break;
+    case 5:                 // remove a box
+        /* code */
+        break;
+    case 7:                 // list boxes
+        /* code */
+        break;
+    case 9:                 // publisher sends a message
+        /* code */
+        break;
+    default:                // invalid command
+        return -1;
+    }
+}
+
+int answer_to_pipe(u_int8_t code,    char* client_named_pipe_path){
+    // write to pipe to answer to client
 }
 
 int create_box(char *box_name) {
     // check if box already exists
-    if (box_exists(box_name)) {
-        fprintf(stderr, "failed: box already exists\n");
-        return -1;
-    }
 
     // create box
-    if (create_new_box(box_name) < 0) {
-        fprintf(stderr, "failed: could not create box\n");
+    int box_fd = tfs_open(box_name, O_CREAT);
+
+    if (box_fd < 0) {
+        fprintf(stderr, "failed: could not create box %s", box_name);
         return -1;
     }
 
-    tfs_open(box_name, O_CREAT); // how to create box
+    box = (box_t*) malloc(sizeof(box_t));
+
+    box->box_fd = box_fd;
+    box->box_name = box_name;
+
+    return 0;
+}
+
+int sub_to_box(char *box_name) {
+    // check if box exists
+
+
+
+    return 0;
+}
+
+int pub_to_box(char *box_name) {
+    // check if box exists
+
+    // check if there is already a publisher
+    if (box->publisher != NULL) {
+        fprintf(stderr, "failed: box %s already has a publisher", box_name);
+        return -1;
+    }
 
     return 0;
 }
@@ -87,22 +159,23 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
-    max_sessions = atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
+    mbroker = (mbroker_t*) malloc(sizeof(mbroker_t));
 
-
+    mbroker->register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
+    mbroker->max_sessions = atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
+    
     // unlink register_pipe_name if it already exists
-    if (unlink(register_pipe_name) < 0) {
+    if (unlink(mbroker->register_pipe_name) < 0) {
         perror("unlink");
         return -1;
     }
     // create the named pipe
-    if (mkfifo(register_pipe_name, 0666) < 0) {
+    if (mkfifo(mbroker->register_pipe_name, 0666) < 0) {
         perror("mkfifo");
         return -1;
     }
 
-    int pipe_fd = open(register_pipe_name, O_RDONLY);
+    int pipe_fd = open(mbroker->register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
         perror("open");
         return -1;
@@ -115,11 +188,11 @@ int main(int argc, char **argv) {
     while (true) {
         // wait for data to be available on the named pipe
         
-        if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
+        if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }
-        if (check_for_pipe_input(pipe_fd, read_fds) == 5){
+        if (read_pipe_input(pipe_fd, read_fds) == 5){
             // close the session
             return 0;
         }

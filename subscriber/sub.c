@@ -39,26 +39,45 @@ void sigint_handler(int sig) {
     interrupted = 1;
 }
 
-int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
-    int ret = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
-        if (ret < 0) {
-            perror("select");
-            return -1;
-        } else {
-            // data is available on the named pipe
-            // read the data from the pipe
-            char buffer[MAX_MESSAGE_SIZE];
-            ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
-            if (num_bytes == 0) {
-                // num_bytes == 0 indicates EOF
-                fprintf(stderr, "[INFO]: pipe closed\n");
-                return 0;
-            } else if (num_bytes == -1) {
-                // num_bytes == -1 indicates error
-                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
+int read_pipe_input(int pipe_fd, fd_set read_fds) {
+    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+    if (sel < 0) {
+        return -1;
+    } else {
+        // data is available on the named pipe
+        // read the data from the pipe
+        u_int8_t code;
+        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
         }
+
+        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
+        fprintf(stdout, "[INFO]: code: %d\n", code);
+
+        if (process_command(pipe_fd, read_fds, code) < 0) {
+            return -1;
+        }
+
+    }
+}
+
+int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
+    // read the message from the pipe
+    switch (code)
+    {
+    case 10:                // subscriber receives a message
+    /* code */
+    break;
+    default:                // invalid command
+        return -1;
+    }
 }
 
 
@@ -104,7 +123,7 @@ int main(int argc, char **argv) {
     while (!interrupted) {
         // wait for data to be available on the named pipe
         
-        if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
+        if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }

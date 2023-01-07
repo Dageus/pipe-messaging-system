@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "structures.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,7 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-
+#include <sys/select.h>
+#include <errno.h>
 
 
 /*
@@ -30,18 +32,40 @@
 /*
  * returns 0 on success, -1 on failure
 */
-int pub_to_box(char* named_pipe, char *box_name) {
-    // IMPORTANT 
-    // use tfsopen to open the box
-    // use tfswrite to write to the box
-    // use tfsclose to close the box
+int send_msg(int pipe_fd, char const *str) {
+    size_t len = strlen(str);
+    size_t written = 0;
+
+    while (written < len) {
+        ssize_t ret = write(pipe_fd, str + written, len - written);
+        if (ret < 0) {
+            fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+            return -1;
+        }
+
+        written += ret;
+    }
     return 0;
 }
 
 /*
  * returns 0 on success, -1 on failure
 */
-int join_box(char* named_pipe, char *box_name) {
+int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
+    int pipe_fd = open(register_pipe_name, O_WRONLY);
+    if (pipe_fd < 0) {
+        perror("open");
+        return -1;
+    }
+
+    char message[256];
+    sprintf(message, "pub %s %s", pipe_name, box_name);
+    if (write(pipe_fd, message, strlen(message)) < 0) {
+        perror("write");
+        return -1;
+    }
+
+    close(pipe_fd);
 
     return 0;
 }
@@ -65,13 +89,12 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    // send request to mbroker to join the server
-    if (join_box(register_pipe_name, box_name) < 0) {
-        fprintf(stderr, "failed: could not join box\n");
+    if (sign_in(register_pipe_name, pipe_name, box_name) < 0) {
+        fprintf(stderr, "failed: could not sign in to box\n");
         return -1;
     }
 
-    int pipe_fd = open("/path/to/named_pipe", O_RDONLY);
+    int pipe_fd = open(register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
         perror("open");
         return -1;
@@ -83,16 +106,23 @@ int main(int argc, char **argv) {
 
     while (true) {
         // wait for input from user in stdin
+        char message[1024];
+        if (fgets(message, sizeof(message), stdin) == NULL) {
+            // received an EOF, exit
+            break;
+        }
 
-        if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
-            fprintf(stderr, "failed: could not check for pipe input\n");
+        message[strcspn(message, "\n")] = 0;
+
+        if (strlen(message) < MAX_MESSAGE_SIZE) {
+            // fill the rest of the message with '\0'
+            memset(message + strlen(message), '\0', MAX_MESSAGE_SIZE - strlen(message));
+        }
+
+        if (send_message(pipe_fd, message) < 0) {
+            fprintf(stderr, "failed: could not send message\n");
             return -1;
         }
- 
-        // if input is a message, process the message
-
-        // if input is an EOF, close the session
-    
     }
 
     // close the named pipe

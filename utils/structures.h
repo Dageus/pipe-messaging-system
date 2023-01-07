@@ -11,15 +11,40 @@
 #define BOX_LIST_MESSAGE_SIZE 264
 #define MAX_MESSAGE_SIZE 1024
 
+
+// THIS FILE IS COMPLETELY UNNECESSARY, 
+// BUT I DID IT JUST TO MAKE IT MORE ORGANIZED
+
+
+// Structure to hold the state of a subscriber client
 typedef struct {
-    int max_sessions;
-    char* register_pipe_path;
-} mbroker_t;
+  int server_fd; // File descriptor for the connection to the mbroker server
+  int client_fd; // File descriptor for the client's named pipe
+  char box_name[32]; // Name of the message box the client is subscribed to
+} subscriber_t;
+
+// Structure to hold the state of a publisher client
+typedef struct {
+  int server_fd; // File descriptor for the connection to the mbroker server
+  int client_fd; // File descriptor for the client's named pipe
+  char box_name[32]; // Name of the message box the client is publishing to
+} publisher_t;
 
 typedef struct {
     char* box_name;
-    
+    publisher_t* publisher;
+    subscriber_t* *subscribers;
+    int box_fd;
+    int num_subscribers;
 } box_t;
+
+// Structure to hold the state of the mbroker server
+typedef struct {
+    char* register_pipe_name;            // Path to the server's named pipe
+    int max_sessions;                    // Maximum number of concurrent sessions
+} mbroker_t;
+
+// COMMANDS:
 
 typedef struct {
     u_int8_t code;                       // code = 1
@@ -74,40 +99,13 @@ typedef struct {
 // additional structs
 
 typedef struct {
-    u_int8_t code;
+    u_int8_t code;                      // code = 9
     char message[1024]; 
 } publisher_message;
 
-typedef struct {
+typedef struct {                        // code = 10
     u_int8_t code;
     char message[1024]; 
 } subscriber_message;
-
-
-// Structure to hold the state of a subscriber client
-typedef struct {
-  int server_fd; // File descriptor for the connection to the mbroker server
-  int client_fd; // File descriptor for the client's named pipe
-  char box_name[32]; // Name of the message box the client is subscribed to
-} subscriber_t;
-
-// Structure to hold the state of a publisher client
-typedef struct {
-  int server_fd; // File descriptor for the connection to the mbroker server
-  int client_fd; // File descriptor for the client's named pipe
-  char box_name[32]; // Name of the message box the client is publishing to
-} publisher_t;
-
-typedef struct {
-    publisher_t* publisher;
-    subscriber_t* *subscribers;
-    publisher_message* message;
-} box_t;
-
-// Structure to hold the state of the mbroker server
-typedef struct {
-  char* pipe_path;          // Path to the server's named pipe
-  int max_sessions;         // Maximum number of concurrent sessions
-} mbroker_t;
 
 #endif
