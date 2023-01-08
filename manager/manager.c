@@ -63,9 +63,9 @@ int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
     // read the message from the pipe
     switch (code)
     {
-    case 8:                // list boxes
+    case 8:                         // list boxes
         u_int8_t last = 0;
-        while (last == 0){
+        while (last == 0){          // make sure to check if its the last box or not
             // parse the return code
             last;
             ssize_t num_bytes;
@@ -96,15 +96,7 @@ int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
-            // parse the number of messages
-            u_int64_t n_messages;
-            num_bytes = read(pipe_fd, &n_messages, sizeof(n_messages));
-            if (num_bytes < 0) {    // error
-                return -1;
-            }
-            
         }
-        
         break;
     default:                // invalid command
         return -1;
