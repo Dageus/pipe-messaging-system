@@ -89,7 +89,7 @@ typedef struct {
 
 typedef struct {
     u_int8_t code;                       // code = 8
-    u_int8_t return_code;                // 1 if it´s the last box, 0 if there are more boxes
+    u_int8_t last;                       // 1 if it´s the last box, 0 if there are more boxes
     char box_name[32];                   // if return_code == 1 sends message, else send empty string
     u_int64_t box_size;                  // size of the box
     u_int64_t n_publishers;              // number of messages in the box

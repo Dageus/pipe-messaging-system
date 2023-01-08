@@ -73,8 +73,23 @@ int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
     switch (code)
     {
     case 10:                // subscriber receives a message
-    /* code */
-    break;
+        // parse the message
+        char message[1024];
+        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        fprintf(stdin, "[INFO]: message: %s\n", message);
+        messages_received++;
+
+        break;
     default:                // invalid command
         return -1;
     }
@@ -110,7 +125,7 @@ int main(int argc, char **argv) {
     char* register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the subscriber wants to connect to
     char* box_name = argv[2];           // box_name is the name of the box to which the subscriber wants to subscribe to
     
-   int pipe_fd = open("/path/to/named_pipe", O_RDONLY);
+   int pipe_fd = open(register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
         perror("open");
         return -1;
@@ -127,11 +142,6 @@ int main(int argc, char **argv) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }
- 
-        // if input is a message, process the message
-
-        // if input is an EOF, close the session
-    
     }
 
     // close the named pipe

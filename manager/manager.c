@@ -30,26 +30,85 @@
 
 // manager creates named pipe for register
 
-int check_for_pipe_input(int pipe_fd, fd_set read_fds) {
-    int ret = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
-        if (ret < 0) {
-            perror("select");
-            return -1;
-        } else {
-            // data is available on the named pipe
-            // read the data from the pipe
-            char buffer[MAX_MESSAGE_SIZE];
-            ssize_t num_bytes = read(pipe_fd, buffer, sizeof(buffer));
-            if (num_bytes == 0) {
-                // num_bytes == 0 indicates EOF
-                fprintf(stderr, "[INFO]: pipe closed\n");
-                return 0;
-            } else if (num_bytes == -1) {
-                // num_bytes == -1 indicates error
-                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
+int read_pipe_input(int pipe_fd, fd_set read_fds) {
+    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+    if (sel < 0) {
+        return -1;
+    } else {
+        // data is available on the named pipe
+        // read the data from the pipe
+        u_int8_t code;
+        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
         }
+
+        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
+        fprintf(stdout, "[INFO]: code: %d\n", code);
+
+        if (process_command(pipe_fd, read_fds, code) < 0) {
+            return -1;
+        }
+
+    }
+}
+
+int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
+    // read the message from the pipe
+    switch (code)
+    {
+    case 8:                // list boxes
+        u_int8_t last = 0;
+        while (last == 0){
+            // parse the return code
+            last;
+            ssize_t num_bytes;
+            num_bytes = read(pipe_fd, &last, sizeof(last));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            // parse the box name
+            char box_name[32];
+            num_bytes = read(pipe_fd, &box_name, sizeof(box_name));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            u_int64_t box_size;
+            num_bytes = read(pipe_fd, &box_size, sizeof(box_size));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            // parse the numer of publishers
+            u_int64_t n_publishers;
+            num_bytes = read(pipe_fd, &n_publishers, sizeof(n_publishers));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            // parse the number of subscribers
+            u_int64_t n_subscribers;
+            num_bytes = read(pipe_fd, &n_subscribers, sizeof(n_subscribers));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            // parse the number of messages
+            u_int64_t n_messages;
+            num_bytes = read(pipe_fd, &n_messages, sizeof(n_messages));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            
+        }
+        
+        break;
+    default:                // invalid command
+        return -1;
+    }
 }
 
 /*

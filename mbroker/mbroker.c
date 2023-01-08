@@ -68,32 +68,115 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
     }
 }
 
+int spread_message(char* message) {
+    // send the message to all the subscribers of the box
+    // for each subscriber, send the message to the pipe
+    // if the pipe is closed, remove the subscriber from the box
+    // if the box is empty, remove the box from the manager
+}
+
 int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
     // read the message from the pipe
     switch (code)
     {
     case 1:         // register a publisher
-        char message[1024];
-        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
-        if (num_bytes < 0) {
-            perror("read");
+        char client_named_pipe_path[256];
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // parse the box name
+        char box_name[32];
+        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // register the publisher
+        if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
             return -1;
         }
         break;
     case 2:                 // register a subscriber
-        /* code */
+        // parse the client pipe name
+        char client_named_pipe_path[256];
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // parse the box name
+        char box_name[32];
+        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // register the subscriber
+        if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
+            return -1;
+        }
         break;
     case 3:                 // create a box
-        /* code */
+        // parse the client pipe name
+        char client_named_pipe_path[256];
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // parse the box name
+        char box_name[32];
+        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // create the box
+        if (create_box_command(client_named_pipe_path, box_name) < 0) {
+            return -1;
+        }
         break;
     case 5:                 // remove a box
-        /* code */
+        // parse the client pipe name
+        char client_named_pipe_path[256];
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // parse the box name
+        char box_name[32];
+        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // remove the box
+        if (remove_box_command(client_named_pipe_path, box_name) < 0) {
+            return -1;
+        }
         break;
     case 7:                 // list boxes
-        /* code */
+        // parse the client pipe name
+        char client_named_pipe_path[256];
+        ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // send the list of boxes to the client
+        if (list_boxes_command(client_named_pipe_path) < 0) {
+            return -1;
+        }
         break;
     case 9:                 // publisher sends a message
-        /* code */
+        // read the message from the pipe
+        char message[1024];
+        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+        if (num_bytes < 0) { // error
+            return -1;
+        }
+        // send the message to all the subscribers of the box
+        if (spread_message(message) < 0) {
+            return -1;
+        }
         break;
     default:                // invalid command
         return -1;
