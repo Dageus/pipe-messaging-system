@@ -32,7 +32,7 @@
 /*
  * returns 0 on success, -1 on failure
 */
-int send_msg(int pipe_fd, char const *str) {
+int send_message(int pipe_fd, char const *str) {
     size_t len = strlen(str);
     size_t written = 0;
 
@@ -46,6 +46,9 @@ int send_msg(int pipe_fd, char const *str) {
 
         written += (size_t) ret;
     }
+
+    // check if the message includes a '\n' 
+
     return 0;
 }
 
@@ -120,12 +123,10 @@ int main(int argc, char **argv) {
             memset(message + strlen(message), '\0', MAX_MESSAGE_SIZE - strlen(message));
         }
 
-        /*
         if (send_message(pipe_fd, message) < 0) {
             fprintf(stderr, "failed: could not send message\n");
             return -1;
         }
-        */
     }
 
     // close the named pipe

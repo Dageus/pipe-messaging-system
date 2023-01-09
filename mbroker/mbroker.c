@@ -46,6 +46,13 @@ int spread_message(char* message) {
     return 0;
 }
 
+int end_session(); 
+// if a box is removed by the manager or a client closes their named pipe
+// subtract 1 to the open sessions
+
+
+// completed functions
+
 
 int process_command(int pipe_fd, u_int8_t code) {
 
@@ -202,8 +209,6 @@ int process_command(int pipe_fd, u_int8_t code) {
     return 0;
 
 }
-
-// completed code: 
 
 int read_pipe_input(int pipe_fd, fd_set read_fds) {
     int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
