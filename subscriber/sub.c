@@ -60,7 +60,7 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
 
         fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
         fprintf(stdout, "[INFO]: code: %d\n", code);
-
+        
         if (process_command(pipe_fd, read_fds, code) < 0) {
             return -1;
         }

@@ -47,14 +47,12 @@ int spread_message(char* message) {
 }
 
 
-int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
-    (void) read_fds; // suppress unused parameter warning
+int process_command(int pipe_fd, u_int8_t code) {
 
 
     // read the message from the pipe
     switch (code)
     {
-    
         // register a publisher
         case 1:{
             char client_named_pipe_path[256];
@@ -229,7 +227,7 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
         fprintf(stdout, "[INFO]: code: %d\n", code);
 
-        if (process_command(pipe_fd, read_fds, code) < 0) {
+        if (process_command(pipe_fd, code) < 0) {
             return -1;
         }
 
