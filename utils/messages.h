@@ -15,10 +15,6 @@ void no_boxes_found() {
     fprintf(stdout, "NO BOXES FOUND\n");
 }
 
-void subscriber_message(const char* message) {
-    fprintf(stdout, "%s\n", message);
-}
-
 void succesful_box_response() {
     fprintf(stdout, "OK\n");
 }

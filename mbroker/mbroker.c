@@ -35,7 +35,175 @@ box_t *box;
 
 int find_box();
 
+int spread_message(char* message) {
+    (void) message; // suppress unused parameter warning
 
+    // send the message to all the subscribers of the box
+    // for each subscriber, send the message to the pipe
+    // if the pipe is closed, remove the subscriber from the box
+    // if the box is empty, remove the box from the manager
+
+    return 0;
+}
+
+
+int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
+    (void) read_fds; // suppress unused parameter warning
+
+
+    // read the message from the pipe
+    switch (code)
+    {
+    
+        // register a publisher
+        case 1:{
+            char client_named_pipe_path[256];
+            ssize_t num_bytes;
+            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // parse the box name
+            char box_name[32];
+            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // register the publisher
+            /*
+            
+            TO DO: creat function register_publisher_command
+            
+            if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
+                return -1;
+            }
+            */
+            
+            break;
+        }
+        // register a subscriber
+        case 2:{
+            // parse the client pipe name
+            char client_named_pipe_path[256];
+            ssize_t num_bytes;
+            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // parse the box name
+            char box_name[32];
+            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // register the subscriber
+            /*
+
+            TO DO: creat function register_subscriber_command
+
+            if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
+                return -1;
+            }
+            */
+            
+            break;
+        }
+        // create a box
+        case 3:{
+            // parse the client pipe name
+            char client_named_pipe_path[256];
+            ssize_t num_bytes;
+            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // parse the box name
+            char box_name[32];
+            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // create the box
+            /*
+
+            TO DO: creat function create_box_command
+
+            if (create_box_command(client_named_pipe_path, box_name) < 0) {
+                return -1;
+            }
+            */
+
+            break;
+        }
+        // remove a box
+        case 5:{    
+            // parse the client pipe name
+            char client_named_pipe_path[256];
+            ssize_t num_bytes;
+            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // parse the box name
+            char box_name[32];
+            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // remove the box
+            /*
+            
+            TO DO: creat function remove_box_command
+
+            if (remove_box_command(client_named_pipe_path, box_name) < 0) {
+                return -1;
+            }
+            */
+        
+            break;
+        }
+        // list boxes
+        case 7:{
+            // parse the client pipe name
+            char client_named_pipe_path[256];
+            ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // send the list of boxes to the client
+            /*
+
+            TO DO: creat function list_boxes_command
+
+            if (list_boxes_command(client_named_pipe_path) < 0) {
+                return -1;
+            }
+            */
+        
+            break;
+        }
+        // publisher sends a message
+        case 9:{
+            // read the message from the pipe
+            char message[1024];
+            ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // send the message to all the subscribers of the box
+            if (spread_message(message) < 0) {
+                return -1;
+            }
+        
+            break;
+        }
+        default:                // invalid command
+            return -1;
+    }
+
+    return 0;
+
+}
 
 // completed code: 
 
@@ -66,125 +234,17 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         }
 
     }
+
+    return 0;
 }
 
-int spread_message(char* message) {
-    // send the message to all the subscribers of the box
-    // for each subscriber, send the message to the pipe
-    // if the pipe is closed, remove the subscriber from the box
-    // if the box is empty, remove the box from the manager
-}
-
-int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
-    // read the message from the pipe
-    switch (code)
-    {
-    case 1:         // register a publisher
-        char client_named_pipe_path[256];
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // parse the box name
-        char box_name[32];
-        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // register the publisher
-        if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
-            return -1;
-        }
-        break;
-    case 2:                 // register a subscriber
-        // parse the client pipe name
-        char client_named_pipe_path[256];
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // parse the box name
-        char box_name[32];
-        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // register the subscriber
-        if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
-            return -1;
-        }
-        break;
-    case 3:                 // create a box
-        // parse the client pipe name
-        char client_named_pipe_path[256];
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // parse the box name
-        char box_name[32];
-        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // create the box
-        if (create_box_command(client_named_pipe_path, box_name) < 0) {
-            return -1;
-        }
-        break;
-    case 5:                 // remove a box
-        // parse the client pipe name
-        char client_named_pipe_path[256];
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // parse the box name
-        char box_name[32];
-        num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // remove the box
-        if (remove_box_command(client_named_pipe_path, box_name) < 0) {
-            return -1;
-        }
-        break;
-    case 7:                 // list boxes
-        // parse the client pipe name
-        char client_named_pipe_path[256];
-        ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // send the list of boxes to the client
-        if (list_boxes_command(client_named_pipe_path) < 0) {
-            return -1;
-        }
-        break;
-    case 9:                 // publisher sends a message
-        // read the message from the pipe
-        char message[1024];
-        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
-        if (num_bytes < 0) { // error
-            return -1;
-        }
-        // send the message to all the subscribers of the box
-        if (spread_message(message) < 0) {
-            return -1;
-        }
-        break;
-    default:                // invalid command
-        return -1;
-    }
-}
 
 int answer_to_pipe(u_int8_t code,    char* client_named_pipe_path){
+    (void) code; // unused parameter
+    (void) client_named_pipe_path; // unused parameter
     // write to pipe to answer to client
+    
+    return 0;
 }
 
 int create_box(char *box_name) {
@@ -207,6 +267,7 @@ int create_box(char *box_name) {
 }
 
 int sub_to_box(char *box_name) {
+    (void) box_name; // unused parameter
     // check if box exists
 
 

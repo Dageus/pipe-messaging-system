@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 #define CLIENT_PIPE_PATH "/tmp/client_pipe_"
 #define SERVER_PIPE_PATH "/tmp/server_pipe"
@@ -103,9 +104,9 @@ typedef struct {
     char message[1024]; 
 } publisher_message;
 
-typedef struct {                        // code = 10
-    u_int8_t code;
-    char message[1024]; 
-} subscriber_message;
+//typedef struct {                        // code = 10
+//    u_int8_t code;
+//    char message[1024]; 
+//} subscriber_message;
 
 #endif

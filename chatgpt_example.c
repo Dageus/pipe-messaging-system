@@ -83,8 +83,8 @@ int subscriber_receive(subscriber_t *subscriber, char *buffer, size_t size) {
 }
 
 
-int main(int argc, char **argv) {
-    fprintf(stderr, "usage: sub <register_pipe_name> <box_name>\n");
-    WARN("unimplemented"); // TODO: implement
-    return -1;
-}
+//int main(int argc, char **argv) {
+//    fprintf(stderr, "usage: sub <register_pipe_name> <box_name>\n");
+//    WARN("unimplemented"); // TODO: implement
+//    return -1;
+//}
