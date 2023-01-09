@@ -36,7 +36,37 @@ int messages_received = 0;  // number of messages received by the subscriber
 int interrupted = 0;        // flag to track if the program has been interrupted
 
 void sigint_handler(int sig) {
+    (void)sig; // suppress unused parameter warning
     interrupted = 1;
+}
+
+int process_command(int pipe_fd, u_int8_t code) {
+    // read the message from the pipe
+    switch (code)
+    {
+    case 10:{                // subscriber receives a message
+        // parse the message
+        char message[1024];
+        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        fprintf(stdin, "[INFO]: message: %s\n", message);
+        messages_received++;
+
+        break;
+    }
+    default:                // invalid command
+        return -1;
+    }
+    return 0;
 }
 
 int read_pipe_input(int pipe_fd, fd_set read_fds) {
@@ -60,39 +90,13 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
 
         fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
         fprintf(stdout, "[INFO]: code: %d\n", code);
-        
-        if (process_command(pipe_fd, read_fds, code) < 0) {
+
+        if (process_command(pipe_fd, code) < 0) {
             return -1;
         }
 
     }
-}
-
-int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
-    // read the message from the pipe
-    switch (code)
-    {
-    case 10:                // subscriber receives a message
-        // parse the message
-        char message[1024];
-        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
-        if (num_bytes == 0) {
-            // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
-            return 0;
-        } else if (num_bytes == -1) {
-            // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
-
-        fprintf(stdin, "[INFO]: message: %s\n", message);
-        messages_received++;
-
-        break;
-    default:                // invalid command
-        return -1;
-    }
+    return 0;
 }
 
 
@@ -101,6 +105,8 @@ int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
  *
 */
 int sub_to_box(char* named_pipe, char* box_name) {
+    (void)named_pipe; // suppress unused parameter warning
+    (void)box_name; // suppress unused parameter warning
     // open box_name
     // read from box_name
     // close box_name
@@ -142,6 +148,12 @@ int main(int argc, char **argv) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }
+
+        if (sub_to_box(register_pipe_name, box_name) < 0) {
+            fprintf(stderr, "failed: could not subscribe to box\n");
+            return -1;
+        }
+
     }
 
     // close the named pipe

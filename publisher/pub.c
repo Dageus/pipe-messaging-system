@@ -37,13 +37,14 @@ int send_msg(int pipe_fd, char const *str) {
     size_t written = 0;
 
     while (written < len) {
-        ssize_t ret = write(pipe_fd, str + written, len - written);
+        size_t to_write =  len - written;
+        ssize_t ret = write(pipe_fd, str + written, to_write);
         if (ret < 0) {
             fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
             return -1;
         }
 
-        written += ret;
+        written += (size_t) ret;
     }
     return 0;
 }
@@ -119,10 +120,12 @@ int main(int argc, char **argv) {
             memset(message + strlen(message), '\0', MAX_MESSAGE_SIZE - strlen(message));
         }
 
+        /*
         if (send_message(pipe_fd, message) < 0) {
             fprintf(stderr, "failed: could not send message\n");
             return -1;
         }
+        */
     }
 
     // close the named pipe

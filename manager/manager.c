@@ -30,44 +30,16 @@
 
 // manager creates named pipe for register
 
-int read_pipe_input(int pipe_fd, fd_set read_fds) {
-    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
-    if (sel < 0) {
-        return -1;
-    } else {
-        // data is available on the named pipe
-        // read the data from the pipe
-        u_int8_t code;
-        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
-        if (num_bytes == 0) {
-            // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
-            return 0;
-        } else if (num_bytes == -1) {
-            // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
 
-        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
-        fprintf(stdout, "[INFO]: code: %d\n", code);
-
-        if (process_command(pipe_fd, read_fds, code) < 0) {
-            return -1;
-        }
-
-    }
-}
-
-int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
+int process_command(int pipe_fd, u_int8_t code) {
     // read the message from the pipe
     switch (code)
     {
-    case 8:                         // list boxes
-        u_int8_t last = 0;
+    case 8:{                        // list boxes
+        u_int8_t last;
+        last = 0;
         while (last == 0){          // make sure to check if its the last box or not
             // parse the return code
-            last;
             ssize_t num_bytes;
             num_bytes = read(pipe_fd, &last, sizeof(last));
             if (num_bytes < 0) {    // error
@@ -98,9 +70,51 @@ int process_command(int pipe_fd, fd_set read_fds, u_int8_t code) {
             }
         }
         break;
+    }                         
     default:                // invalid command
         return -1;
     }
+    return 0;
+}
+
+int read_pipe_input(int pipe_fd, fd_set read_fds) {
+    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+    if (sel < 0) {
+        return -1;
+    } else {
+        // data is available on the named pipe
+        // read the data from the pipe
+        u_int8_t code;
+        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
+        fprintf(stdout, "[INFO]: code: %d\n", code);
+
+        if (process_command(pipe_fd, code) < 0) {
+            return -1;
+        }
+
+    }
+    return 0;
+}
+
+
+char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsigned int size_of_message) {
+    char *message = (char*) malloc(sizeof(char) * size_of_message); // 8 bits from the u_int8_t + 256 bits from the client_named_pipe_path + 32 bits from the box_name
+    memcpy(message, &code, sizeof(code));
+    memcpy(message, client_pipe_name, strlen(client_pipe_name));
+    if (box_name != NULL)
+        memcpy(message, box_name, strlen(box_name));
+    return message;
 }
 
 /*
@@ -133,15 +147,6 @@ int list_boxes(char* named_pipe) {
 
     // receive the answer from the mbroker through the named pipe
     return 0;
-}
-
-char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, int size_of_message) {
-    char message[size_of_message]; // 8 bits from the u_int8_t + 256 bits from the client_named_pipe_path + 32 bits from the box_name
-    memcpy(message, &code, sizeof(code));
-    memcpy(message, client_pipe_name, sizeof(client_pipe_name));
-    if (box_name != NULL)
-        memcpy(message, box_name, sizeof(box_name));
-    return message;
 }
 
 /*
@@ -261,7 +266,7 @@ int main(int argc, char **argv) {
     while (true){
          // wait for data to be available on the named pipe
         
-        if (check_for_pipe_input(pipe_fd, read_fds) < 0) {
+        if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }
