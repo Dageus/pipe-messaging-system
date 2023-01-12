@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <signal.h>
+#include <pthread.h>
 
 /*
  * a session remains open until either:
@@ -22,9 +24,7 @@
 
 mbroker_t *mbroker;
 
-box_t *box_list;
-
-
+box_list_t *box_list = NULL;
 
 // array to keep track of the sessions
 
@@ -33,15 +33,16 @@ box_t *box_list;
 // IMPORTANT: 
 // - functions to implement yet:
 
-int find_box();
+box_t* get_box_by_publisher();
 
-int spread_message(char* message, ) {
-    (void) message; // suppress unused parameter warning
-
+int spread_message(char* message, box_t* box) {
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
-    // if the pipe is closed, remove the subscriber from the box
-    // if the box is empty, remove the box from the manager
+
+    // iterate through the subscribers and send message to their pipes
+    subscriber_list_t* subscriber = box->subscribers;
+
+
 
     return 0;
 }
@@ -272,28 +273,8 @@ int answer_to_pipe(u_int8_t code, char* client_named_pipe_path){
 
 int create_box(char *box_name) {
     // check if box already exists
-
-    // create box
-    int box_fd = tfs_open(box_name, O_CREAT);
-
-    if (box_fd < 0) {
-        fprintf(stderr, "failed: could not create box %s", box_name);
-        return -1;
-    }
-
-    box = (box_t*) malloc(sizeof(box_t));
-
-    box->box_fd = box_fd;
-    box->box_name = box_name;
-
-    return 0;
-}
-
-int sub_to_box(char *box_name) {
-    (void) box_name; // unused parameter
-    // check if box exists
     if (box_list == NULL) {
-        initialize_box_list(box_name);
+        box_list = new_node(box_name);
     } else {
         // check if box is already in the list
         if (!box_in_list(box_name)) {
@@ -301,6 +282,11 @@ int sub_to_box(char *box_name) {
             add_box_to_list(box_name);
         }
     }
+    return 0;
+}
+
+int sub_to_box(char *box_name) {
+   
 
 
 
@@ -309,6 +295,9 @@ int sub_to_box(char *box_name) {
 
 int pub_to_box(char *box_name) {
     // check if box exists
+    if (!box_in_list(box_name)) {
+        return -1;
+    }
 
     // check if there is already a publisher
     if (box->publisher != NULL) {

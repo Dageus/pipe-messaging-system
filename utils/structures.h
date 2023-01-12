@@ -14,24 +14,15 @@
 // THIS FILE IS COMPLETELY UNNECESSARY, 
 // BUT I DID IT JUST TO MAKE IT MORE ORGANIZED
 
-box_t* initialize_box_list(char* box_name){
-    box_t* box = (box_t*) malloc(sizeof(box_t));
-    box->box_name = box_name;
-    box->publisher = NULL;
-    box->subscribers = NULL;
-    box->num_subscribers = 0;
-    box->next = NULL;
-    return box;
-}
-
-box_t* new_node(char* box_name){
-    box_t* box = (box_t*) malloc(sizeof(box_t));
-    box->box_name = box_name;
-    box->publisher = NULL;
-    box->subscribers = NULL;
-    box->num_subscribers = 0;
-    box->next = NULL;
-    return box;
+box_list_t* new_node(char* box_name){
+    box_list_t* box_node = (box_list_t*) malloc(sizeof(box_list_t));
+    box_node->box = (box_t*) malloc(sizeof(box_t));
+    box_node->box->box_name = box_name;
+    box_node->box->publisher = NULL;
+    box_node->box->subscribers = NULL;
+    box_node->box->num_subscribers = 0;
+    box_node->next = NULL;
+    return box_node;
 }
 
 // Structure to hold the state of a subscriber client
@@ -48,14 +39,22 @@ typedef struct {
   char box_name[32]; // Name of the message box the client is publishing to
 } publisher_t;
 
-typedef struct box_t{
+typedef struct subscriber_list_t{
+    subscriber_t* subscriber;
+    struct subscriber_list_t* next;
+} subscriber_list_t;
+
+typedef struct {
     char* box_name;
     publisher_t* publisher;
-    subscriber_t* *subscribers;
-    int box_fd;
+    subscriber_list_t* subscribers;
     int num_subscribers;
-    struct box_t* next;
 } box_t;
+
+typedef struct box_list_t{
+    box_t* box;
+    struct box_t* next;
+} box_list_t;
 
 // Structure to hold the state of the mbroker server
 typedef struct {
