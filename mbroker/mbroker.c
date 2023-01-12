@@ -22,20 +22,20 @@
 
 mbroker_t *mbroker;
 
-box_t *box;
+box_t *box_list;
+
+
 
 // array to keep track of the sessions
 
 // array to keep track of the pipes
-
-// array to keep track of the boxes
 
 // IMPORTANT: 
 // - functions to implement yet:
 
 int find_box();
 
-int spread_message(char* message) {
+int spread_message(char* message, ) {
     (void) message; // suppress unused parameter warning
 
     // send the message to all the subscribers of the box
@@ -241,8 +241,28 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
     return 0;
 }
 
+void add_box_to_list(char* box_name){
+    // find the last box in the list
+    while (box_list != NULL) {
+        box_list = box_list->next;
+    }
+    // add the new box to the list
+    box_list->next = new_node(box_name);
+}
 
-int answer_to_pipe(u_int8_t code,    char* client_named_pipe_path){
+int box_in_list(char* box_name){
+    // iterate the box list and find if there is a box with the same name
+    while (box_list != NULL) {
+        if (strcmp(box_list->box_name, box_name) == 0) {
+            return 1;
+        }
+        box_list = box_list->next;
+    }
+    return 0;
+}
+
+
+int answer_to_pipe(u_int8_t code, char* client_named_pipe_path){
     (void) code; // unused parameter
     (void) client_named_pipe_path; // unused parameter
     // write to pipe to answer to client
@@ -272,6 +292,15 @@ int create_box(char *box_name) {
 int sub_to_box(char *box_name) {
     (void) box_name; // unused parameter
     // check if box exists
+    if (box_list == NULL) {
+        initialize_box_list(box_name);
+    } else {
+        // check if box is already in the list
+        if (!box_in_list(box_name)) {
+            // add box to the list
+            add_box_to_list(box_name);
+        }
+    }
 
 
 

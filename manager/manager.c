@@ -1,5 +1,6 @@
 #include "logging.h"
 #include "structures.h"
+#include "messages.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -10,8 +11,6 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <sys/select.h>
-
-// pipe path format: /tmp/client_pipe_<num>
 
 /*
  *
@@ -29,7 +28,6 @@
  */
 
 // manager creates named pipe for register
-
 
 int process_command(int pipe_fd, u_int8_t code) {
     // read the message from the pipe
@@ -51,6 +49,9 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
+            if (strcmp(box_name, "") != 0 && last == 1) { // this means there are no boxes
+                break;
+            }
             u_int64_t box_size;
             num_bytes = read(pipe_fd, &box_size, sizeof(box_size));
             if (num_bytes < 0) {    // error
@@ -67,6 +68,9 @@ int process_command(int pipe_fd, u_int8_t code) {
             num_bytes = read(pipe_fd, &n_subscribers, sizeof(n_subscribers));
             if (num_bytes < 0) {    // error
                 return -1;
+            }
+            if (strcmp(box_name, "") != 0 && last == 1) { // this means there are no boxes
+                no_boxes_found();
             }
         }
         break;
@@ -102,11 +106,10 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         if (process_command(pipe_fd, code) < 0) {
             return -1;
         }
-
+        return 1;
     }
     return 0;
 }
-
 
 char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsigned int size_of_message) {
     char *message = (char*) malloc(sizeof(char) * size_of_message); // 8 bits from the u_int8_t + 256 bits from the client_named_pipe_path + 32 bits from the box_name
@@ -120,7 +123,7 @@ char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsi
 /*
  * returns 0 on success, -1 on failure
  */
-int list_boxes(char* named_pipe) {
+int list_boxes_request(char* named_pipe) {
     // list boxes in mbroker
 
     // open the pipe
@@ -250,7 +253,7 @@ int main(int argc, char **argv) {
             remove_box(register_pipe_name, box_name);
         }
     } else {                            // this means we're listing the boxes
-        list_boxes(register_pipe_name);
+        list_boxes_request(register_pipe_name);
     }
 
     int pipe_fd = open(pipe_name, O_RDONLY);
@@ -264,16 +267,13 @@ int main(int argc, char **argv) {
     FD_SET(pipe_fd, &read_fds);
 
     while (true){
-         // wait for data to be available on the named pipe
-        
-        if (read_pipe_input(pipe_fd, read_fds) < 0) {
+        int select_result = read_pipe_input(pipe_fd, read_fds);
+        if (select_result == -1) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
+        } else if (select_result == 1) {                // was successful
+            return 0;
         }
-
-        // actual code
+        // continue waiting for input
     }
-
-    WARN("unimplemented"); // TODO: implement
-    return -1;
 }

@@ -6,8 +6,6 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
-#define CLIENT_PIPE_PATH "/tmp/client_pipe_"
-#define SERVER_PIPE_PATH "/tmp/server_pipe"
 #define BOX_MESSAGE_SIZE 296
 #define BOX_LIST_MESSAGE_SIZE 264
 #define MAX_MESSAGE_SIZE 1024
@@ -16,12 +14,31 @@
 // THIS FILE IS COMPLETELY UNNECESSARY, 
 // BUT I DID IT JUST TO MAKE IT MORE ORGANIZED
 
+box_t* initialize_box_list(char* box_name){
+    box_t* box = (box_t*) malloc(sizeof(box_t));
+    box->box_name = box_name;
+    box->publisher = NULL;
+    box->subscribers = NULL;
+    box->num_subscribers = 0;
+    box->next = NULL;
+    return box;
+}
+
+box_t* new_node(char* box_name){
+    box_t* box = (box_t*) malloc(sizeof(box_t));
+    box->box_name = box_name;
+    box->publisher = NULL;
+    box->subscribers = NULL;
+    box->num_subscribers = 0;
+    box->next = NULL;
+    return box;
+}
 
 // Structure to hold the state of a subscriber client
 typedef struct {
-  int server_fd; // File descriptor for the connection to the mbroker server
-  int client_fd; // File descriptor for the client's named pipe
-  char box_name[32]; // Name of the message box the client is subscribed to
+  int server_fd;        // File descriptor for the connection to the mbroker server
+  int client_fd;        // File descriptor for the client's named pipe
+  char box_name[32];    // Name of the message box the client is subscribed to
 } subscriber_t;
 
 // Structure to hold the state of a publisher client
@@ -31,12 +48,13 @@ typedef struct {
   char box_name[32]; // Name of the message box the client is publishing to
 } publisher_t;
 
-typedef struct {
+typedef struct box_t{
     char* box_name;
     publisher_t* publisher;
     subscriber_t* *subscribers;
     int box_fd;
     int num_subscribers;
+    struct box_t* next;
 } box_t;
 
 // Structure to hold the state of the mbroker server

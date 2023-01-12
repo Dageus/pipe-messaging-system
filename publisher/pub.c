@@ -57,15 +57,13 @@ int send_message(int pipe_fd, char const *str) {
 */
 int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
     int pipe_fd = open(register_pipe_name, O_WRONLY);
-    if (pipe_fd < 0) {
-        perror("open");
+    if (pipe_fd < 0) { // error
         return -1;
     }
 
     char message[256];
     sprintf(message, "pub %s %s", pipe_name, box_name);
-    if (write(pipe_fd, message, strlen(message)) < 0) {
-        perror("write");
+    if (write(pipe_fd, message, strlen(message)) < 0) { // error
         return -1;
     }
 
