@@ -274,6 +274,7 @@ int answer_to_pipe(u_int8_t code, char* client_named_pipe_path){
 int create_box(char *box_name) {
     // check if box already exists
     if (box_list == NULL) {
+        tfs_open(box_name, O_CREAT);
         box_list = new_node(box_name);
     } else {
         // check if box is already in the list
