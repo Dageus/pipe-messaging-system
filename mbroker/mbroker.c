@@ -3,6 +3,7 @@
 #include "messages.h"
 #include "operations.h"
 #include "state.h"
+//#include "producer-consumer.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -43,6 +44,74 @@ int spread_message(char* message, box_t* box) {
     subscriber_list_t* subscriber = box->subscribers;
 
 
+
+    return 0;
+}
+
+int remove_box_command(char* box_name) {
+    // remove the box from the list
+    // free the memory
+    // close the pipes
+    // return 0 if success, -1 if error
+
+    // find the box
+    box_list_t* box_node = box_list;
+    box_list_t* prev_box_node = NULL;
+    while (box_node != NULL) {
+        if (strcmp(box_node->box->box_name, box_name) == 0) {
+            break;
+        }
+        prev_box_node = box_node;
+        box_node = box_node->next;
+    }
+    if (box_node == NULL) {
+        return -1;
+    }
+
+    // remove the box from the list
+    if (prev_box_node == NULL) {
+        box_list = box_node->next;
+    } else {
+        prev_box_node->next = box_node->next;
+    }
+
+    // free the memory
+    free(box_node->box->box_name);
+    free(box_node->box);
+    free(box_node);
+
+    return 0;
+}
+
+int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
+    // find the box
+    box_list_t* box_node = box_list;
+    while (box_node != NULL) {
+        if (strcmp(box_node->box->box_name, box_name) == 0) {
+            break;
+        }
+        box_node = box_node->next;
+    }
+    if (box_node == NULL) {
+        return -1;
+    }
+
+    // add the subscriber to the box
+    subscriber_t* subscriber = malloc(sizeof(subscriber_t));
+    subscriber->client_fd = client_named_pipe_path;
+    strcpy(subscriber->box_name, box_name);
+
+    if (box_node->box->subscribers == NULL) {   // no subscribers yet
+        box_node->box->subscribers = malloc(sizeof(subscriber_list_t));
+        box_node->box->subscribers->subscriber = subscriber;
+        box_node->box->subscribers->next = NULL;
+    } else {                                    // there are already subscribers
+        subscriber_list_t* subscriber_node = box_node->box->subscribers;
+        while (subscriber_node->next != NULL) {
+            subscriber_node = subscriber_node->next;
+        }
+        subscriber_node->next = subscriber;
+    }
 
     return 0;
 }
@@ -103,14 +172,10 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
             // register the subscriber
-            /*
-
-            TO DO: creat function register_subscriber_command
 
             if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
                 return -1;
             }
-            */
             
             break;
         }
@@ -134,7 +199,7 @@ int process_command(int pipe_fd, u_int8_t code) {
 
             TO DO: creat function create_box_command
 
-            if (create_box_command(client_named_pipe_path, box_name) < 0) {
+            if (create_box_command( box_name) < 0) {
                 return -1;
             }
             */
@@ -157,14 +222,10 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
             // remove the box
-            /*
-            
-            TO DO: creat function remove_box_command
 
-            if (remove_box_command(client_named_pipe_path, box_name) < 0) {
+            if (remove_box_command( box_name) < 0) {
                 return -1;
             }
-            */
         
             break;
         }
@@ -254,7 +315,7 @@ void add_box_to_list(char* box_name){
 int box_in_list(char* box_name){
     // iterate the box list and find if there is a box with the same name
     while (box_list != NULL) {
-        if (strcmp(box_list->box_name, box_name) == 0) {
+        if (strcmp(box_list->box->box_name, box_name) == 0) {
             return 1;
         }
         box_list = box_list->next;
@@ -286,23 +347,9 @@ int create_box(char *box_name) {
     return 0;
 }
 
-int sub_to_box(char *box_name) {
-   
-
-
-
-    return 0;
-}
-
 int pub_to_box(char *box_name) {
     // check if box exists
     if (!box_in_list(box_name)) {
-        return -1;
-    }
-
-    // check if there is already a publisher
-    if (box->publisher != NULL) {
-        fprintf(stderr, "failed: box %s already has a publisher", box_name);
         return -1;
     }
 

@@ -27,14 +27,12 @@ box_list_t* new_node(char* box_name){
 
 // Structure to hold the state of a subscriber client
 typedef struct {
-  int server_fd;        // File descriptor for the connection to the mbroker server
   int client_fd;        // File descriptor for the client's named pipe
   char box_name[32];    // Name of the message box the client is subscribed to
 } subscriber_t;
 
 // Structure to hold the state of a publisher client
 typedef struct {
-  int server_fd; // File descriptor for the connection to the mbroker server
   int client_fd; // File descriptor for the client's named pipe
   char box_name[32]; // Name of the message box the client is publishing to
 } publisher_t;
