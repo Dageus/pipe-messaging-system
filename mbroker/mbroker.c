@@ -48,6 +48,39 @@ int spread_message(char* message, box_t* box) {
     return 0;
 }
 
+box_t* find_box_by_name(char* box_name) {
+    //Find the box in the list
+    while (box_list != NULL){
+        if (strcmp(box_list->box->box_name, box_name) == 0) {
+            return box_list->box;
+        }
+        box_list = box_list->next;
+    }
+    return NULL;
+}
+
+int creat_box(char* box_name){
+    // Verify if the box already exists
+    if (find_box_by_name(box_name) != NULL)
+        return -1;
+
+    // Create the box
+    box_t* box = malloc(sizeof(box_t));
+    box->box_name = malloc(sizeof(char) * (strlen(box_name) + 1));
+    strcpy(box->box_name, box_name);
+    box->publisher = NULL;
+    box->subscribers = NULL;
+    box->num_subscribers = 0;
+
+    // Add the box to the list
+    box_list_t* box_node = malloc(sizeof(box_list_t));
+    box_node->box = box;
+    box_node->next = box_list;
+    box_list = box_node;
+
+    return 0;
+}
+
 int remove_box_command(char* box_name) {
     // remove the box from the list
     // free the memory
@@ -83,30 +116,45 @@ int remove_box_command(char* box_name) {
     return 0;
 }
 
-int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
-    // find the box
-    box_list_t* box_node = box_list;
-    while (box_node != NULL) {
-        if (strcmp(box_node->box->box_name, box_name) == 0) {
-            break;
-        }
-        box_node = box_node->next;
-    }
-    if (box_node == NULL) {
+
+int register_publisher_command(char* client_named_pipe_path, char* box_name) {
+    // Find box in the list
+    box_t* box = find_box_by_name(box_name);
+    if (box == NULL)
         return -1;
-    }
+
+    // Verify if the box already has a publisher
+    if (box->publisher != NULL)
+        return -1;
+
+    // Create the publisher
+    publisher_t* publisher = malloc(sizeof(publisher_t));
+    publisher->client_fd = client_named_pipe_path;
+    strcpy(publisher->box_name, box_name);
+
+    // Add the publisher to the box
+    box->publisher = publisher;
+
+    return 0;
+}
+
+int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
+    // Find box in the list
+    box_t* box = find_box_by_name(box_name);
+    if (box == NULL)
+        return -1;
 
     // add the subscriber to the box
     subscriber_t* subscriber = malloc(sizeof(subscriber_t));
     subscriber->client_fd = client_named_pipe_path;
     strcpy(subscriber->box_name, box_name);
 
-    if (box_node->box->subscribers == NULL) {   // no subscribers yet
-        box_node->box->subscribers = malloc(sizeof(subscriber_list_t));
-        box_node->box->subscribers->subscriber = subscriber;
-        box_node->box->subscribers->next = NULL;
+    if (box->subscribers == NULL) {   // no subscribers yet
+        box->subscribers = malloc(sizeof(subscriber_list_t));
+        box->subscribers->subscriber = subscriber;
+        box->subscribers->next = NULL;
     } else {                                    // there are already subscribers
-        subscriber_list_t* subscriber_node = box_node->box->subscribers;
+        subscriber_list_t* subscriber_node = box->subscribers;
         while (subscriber_node->next != NULL) {
             subscriber_node = subscriber_node->next;
         }
@@ -123,6 +171,58 @@ int end_session();
 
 // completed functions
 
+
+// message format:
+//[ code = 8 (uint8_t) ] | [ last (uint8_t) ] | [ box_name (char[32]) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
+int create_listing_message(box_list_t* box_node) {
+    // create the message
+
+    // code
+    u_int8_t code = 8;
+    
+    // last
+    u_int8_t last = 0;
+    if (box_node->next == NULL) {
+        last = 1;
+    }
+    
+    // box_name
+    char box_name[32];
+    strcpy(box_name, box_node->box->box_name);
+
+    // box_size
+    u_int64_t box_size = sizeof(box_node->box);
+
+    // n_publishers
+    u_int64_t n_publishers = 0;
+    if (box_node->box->publisher != NULL) {
+        n_publishers = 1;
+    }
+
+    // n_subscribers
+    u_int64_t n_subscribers = box_node->box->num_subscribers;
+
+    // send the message to the pipe
+    // write(pipe_fd, message, sizeof(message));
+
+    return 0;
+}
+
+
+//This function is very incomplete and possibly right now it only iterates through the boxes and creates a message
+//for each box. It does not send the message to the pipe.
+int list_boxes_command(){
+    // list all the boxes in the list
+    // return 0 if success, -1 if error
+
+    // iterate through the boxes and creat a message for each box
+    box_list_t* box_node = box_list;
+    while (box_node != NULL) {
+        create_listing_message(box_node);
+    }
+
+    return 0;
+}
 
 int process_command(int pipe_fd, u_int8_t code) {
 
@@ -145,15 +245,10 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
             // register the publisher
-            /*
-            
-            TO DO: creat function register_publisher_command
-            
             if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
                 return -1;
             }
-            */
-            
+
             break;
         }
         // register a subscriber
@@ -172,7 +267,6 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
             // register the subscriber
-
             if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
                 return -1;
             }
@@ -195,14 +289,9 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
             // create the box
-            /*
-
-            TO DO: creat function create_box_command
-
-            if (create_box_command( box_name) < 0) {
+            if (create_box_command(box_name) < 0) {
                 return -1;
             }
-            */
 
             break;
         }
@@ -223,7 +312,7 @@ int process_command(int pipe_fd, u_int8_t code) {
             }
             // remove the box
 
-            if (remove_box_command( box_name) < 0) {
+            if (remove_box_command(box_name) < 0) {
                 return -1;
             }
         
@@ -238,14 +327,11 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
             // send the list of boxes to the client
-            /*
 
-            TO DO: creat function list_boxes_command
-
+            // TODO: this function only creats the list of messages doesn't send them anywhere
             if (list_boxes_command(client_named_pipe_path) < 0) {
                 return -1;
             }
-            */
         
             break;
         }
