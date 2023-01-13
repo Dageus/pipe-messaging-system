@@ -68,6 +68,10 @@ int box_in_list(char* box_name){
 int spread_message(char* message, char* publisher_pipe_name) {
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
+    box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
+    if (box == NULL) {  // if the box does not exist
+        return -1;
+    }
 
     // iterate through the subscribers and send message to their pipes
     subscriber_list_t* subscribers = box->subscribers;
@@ -123,18 +127,13 @@ int create_box_command(char* box_name){
     if (box_fd < 0){
         return -1;
     }
-    box_t* box = malloc(sizeof(box_t));
-    box->box_name = malloc(sizeof(char) * (strlen(box_name) + 1));
-    strcpy(box->box_name, box_name);
-    box->publisher = 0;
-    box->subscribers = NULL;
-    box->num_subscribers = 0;
 
     // Add the box to the list
-    box_list_t* box_node = malloc(sizeof(box_list_t));
-    box_node->box = box;
-    box_node->next = box_list;
-    box_list = box_node;
+    box_list_t* box_node = new_node(box_name);
+    while (box_list != NULL){
+        box_list = box_list->next;
+    }
+    box_list->next = box_node;
 
     return 0;
 }
@@ -184,16 +183,16 @@ int register_publisher_command(char* client_named_pipe_path, char* box_name) {
         return -1;
 
     // Verify if the box already has a publisher
-    if (box->publisher != NULL)
+    if (box->publisher_named_pipe != NULL)
         return -1;
 
     // Create the publisher
     publisher_t* publisher = malloc(sizeof(publisher_t));
     strcpy(publisher->named_pipe, client_named_pipe_path);
-    publisher->box = box;
+    publisher->box_name = box_name;
 
     // Add the publisher to the box
-    box->publisher = publisher;
+    box->publisher_named_pipe = client_named_pipe_path;
 
     return 0;
 }
@@ -259,7 +258,7 @@ char* create_listing_message(box_list_t* box_node) {
 
     // n_publishers
     u_int64_t n_publishers = 0;
-    if (box_node->box->publisher != NULL) {
+    if (box_node->box->publisher_named_pipe != NULL) {
         n_publishers = 1;
     }
     memcpy(message + current_index, &n_publishers, sizeof(n_publishers));

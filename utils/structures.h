@@ -19,13 +19,13 @@
 typedef struct {
     int box_fd;              // File descriptor for the client's named pipe
     char named_pipe[256];        
-    char box_name[32];    // Name of the message box the client is subscribed to
+    char box_name[32];       // Name of the message box the client is subscribed to
 } subscriber_t;
 
 // Structure to hold the state of a publisher client
 typedef struct {
-    char named_pipe[256]; // File descriptor for the client's named pipe
-    box_t* box;
+    char named_pipe[256];   // File descriptor for the client's named pipe
+    char* box_name;         // Name of the message box the client is subscribed to
 } publisher_t;
 
 typedef struct subscriber_list_t{
@@ -47,10 +47,10 @@ typedef struct box_list_t{
 
 box_list_t* new_node(char* box_name){
     box_list_t* box_node = (box_list_t*) malloc(sizeof(box_list_t));
-    box_node->box->box_name = box_name;
-    box_node->box->publisher = NULL;
+    strcpy(box_node->box->box_name, box_name);
+    box_node->box->publisher_named_pipe = NULL;
     box_node->box->subscribers = NULL;
-    box_node->box->num_subscribers = 0;
+    box_node->box->num_subscribers = NULL;
     box_node->next = NULL;
     return box_node;
 }
