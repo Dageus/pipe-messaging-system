@@ -45,7 +45,6 @@ typedef struct box_list_t{
 
 box_list_t* new_node(char* box_name){
     box_list_t* box_node = (box_list_t*) malloc(sizeof(box_list_t));
-    box_node->box = (box_t*) malloc(sizeof(box_t));
     box_node->box->box_name = box_name;
     box_node->box->publisher = NULL;
     box_node->box->subscribers = NULL;
@@ -112,8 +111,7 @@ typedef struct {
     u_int64_t n_subscribers;             // number of subscribers
 } box_list_message;
 
-// additional structs
-
+// additional structss
 typedef struct {
     u_int8_t code;                      // code = 9
     char message[1024]; 

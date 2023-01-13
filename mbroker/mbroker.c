@@ -37,6 +37,7 @@ box_list_t *box_list = NULL;
 
 int end_session(){
     // IMPORTANT
+    return 0;
 }
 // if a box is removed by the manager or a client closes their named pipe
 // subtract 1 to the open sessions
@@ -51,6 +52,17 @@ box_t* get_box_by_publisher_pipe(char* publisher_pipe_name){
         box_node = box_node->next;
     }
     return NULL;
+}
+
+int box_in_list(char* box_name){
+    // iterate the box list and find if there is a box with the same name
+    while (box_list != NULL) {
+        if (strcmp(box_list->box->box_name, box_name) == 0) {
+            return 1;
+        }
+        box_list = box_list->next;
+    }
+    return 0;
 }
 
 int spread_message(char* message, char* publisher_pipe_name) {
@@ -90,7 +102,7 @@ box_t* find_box_by_name(char* box_name) {
     return NULL;
 }
 
-int create_box(char* box_name){
+int create_box_command(char* box_name){
     // Verify if the box already exists
     if (find_box_by_name(box_name) != NULL)
         return -1;
@@ -206,36 +218,44 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
 //[ code = 8 (uint8_t) ] | [ last (uint8_t) ] | [ box_name (char[32]) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
 char* create_listing_message(box_list_t* box_node) {
     // create the message
-    char message[56]; // 1 + 1 + 32 + 8 + 8 + 8 = 56 bytes
+    char *message = (char*) malloc(sizeof(char) * 56); // 1 + 1 + 32 + 8 + 8 + 8 = 56 bytes
+    long unsigned int current_index = 0;
 
     // code
     u_int8_t code = 8;
     memcpy(message, &code, sizeof(code));
+    current_index += sizeof(code);
     
     // last
     u_int8_t last = 0;
     if (box_node->next == NULL) {
         last = 1;
     }
-    memcpy(message, &last, sizeof(last));
+    memcpy(message + current_index, &last, sizeof(last));
+    current_index += sizeof(last);
     
     // box_name
-    memcpy(message, box_node->box->box_name, sizeof(box_node->box->box_name));
+    char box_name[32];
+    strcpy(box_name, box_node->box->box_name);
+    memcpy(message + current_index, box_name, sizeof(box_name));
+    current_index += sizeof(box_node->box->box_name);
 
     // box_size
     u_int64_t box_size = sizeof(box_node->box);
-    memcpy(message, &box_size, sizeof(box_size));
+    memcpy(message + current_index, &box_size, sizeof(box_size));
+    current_index += sizeof(box_size);
 
     // n_publishers
     u_int64_t n_publishers = 0;
     if (box_node->box->publisher != NULL) {
         n_publishers = 1;
     }
-    memcpy(message, &n_publishers, sizeof(n_publishers));
+    memcpy(message + current_index, &n_publishers, sizeof(n_publishers));
+    current_index += sizeof(n_publishers);
 
     // n_subscribers
     u_int64_t n_subscribers = box_node->box->num_subscribers;
-    memcpy(message, &n_subscribers, sizeof(n_subscribers));
+    memcpy(message + current_index, &n_subscribers, sizeof(n_subscribers));
 
     return message;
 }
@@ -290,11 +310,12 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
     } else {
         // data is available on the named pipe
         // read the data from the pipe
+        fprintf(stderr, "data is available on the named pipe\n");
         u_int8_t code;
-        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, &code, sizeof(code));
         if (num_bytes == 0) {
             // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
             return 0;
         } else if (num_bytes == -1) {
             // num_bytes == -1 indicates error
@@ -304,7 +325,7 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
 
         if (code == 9){
             char message[1024];
-            ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+            num_bytes = read(pipe_fd, message, sizeof(message));
             if (num_bytes < 0) { // error
                 return -1;
             }
@@ -418,6 +439,8 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
+            fprintf(stdout, "[INFO]: Box %s created", box_name);
+
             break;
         }
         // remove a box
@@ -479,7 +502,6 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
         if (num_bytes == 0) {
             // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
             return 0;
         } else if (num_bytes == -1) {
             // num_bytes == -1 indicates error
@@ -496,6 +518,7 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
     return 0;
 }
 
+/*
 void add_box_to_list(char* box_name){
     // find the last box in the list
     while (box_list != NULL) {
@@ -503,18 +526,7 @@ void add_box_to_list(char* box_name){
     }
     // add the new box to the list
     box_list->next = new_node(box_name);
-}
-
-int box_in_list(char* box_name){
-    // iterate the box list and find if there is a box with the same name
-    while (box_list != NULL) {
-        if (strcmp(box_list->box->box_name, box_name) == 0) {
-            return 1;
-        }
-        box_list = box_list->next;
-    }
-    return 0;
-}
+}*/
 
 
 int answer_to_pipe(u_int8_t code, char* client_named_pipe_path){
@@ -541,6 +553,8 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    fprintf(stderr, "[INFO]: starting mbroker\n");
+
     mbroker = (mbroker_t*) malloc(sizeof(mbroker_t));
 
     mbroker->register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
@@ -550,9 +564,15 @@ int main(int argc, char **argv) {
     if (unlink(mbroker->register_pipe_name) < 0) {
         return -1;
     }
+
+    fprintf(stderr, "[INFO]: creating named pipe: %s\n", mbroker->register_pipe_name);
+
     // create the named pipe
     if (mkfifo(mbroker->register_pipe_name, 0666) < 0) {
+        fprintf(stderr, "failed: could not create named pipe\n");
         return -1;
+    } else {
+        fprintf(stderr, "[INFO]: named pipe created\n");
     }
 
     int pipe_fd = open(mbroker->register_pipe_name, O_RDONLY);
