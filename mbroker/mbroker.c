@@ -121,22 +121,16 @@ int create_box_command(char* box_name){
     if (find_box_by_name(box_name) != NULL)
         return -1;
 
-    fprintf(stderr, "Creating box %s", box_name);
-
     // Create the box
-    int box_fd = tfs_unlink(box_name);
-    box_fd = tfs_open(box_name, O_CREAT);
+    int box_fd = tfs_open(box_name, TFS_O_CREAT);
     if (box_fd < 0){
         return -1;
     }
-    fprintf(stderr, "Box %s created", box_name);
 
     // Add the box to the list
     box_list_t* box_node = new_node(box_name);
-    while (box_list->next != NULL){
-        box_list = box_list->next;
-    }
-    box_list->next = box_node;
+    box_node->next = box_list;
+    box_list = box_node;
 
     return 0;
 }
@@ -469,6 +463,8 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
+            fprintf(stdout, "[INFO]: Client pipe fd: %d\n", client_pipe_fd);
+
             // send the answer to the client
             if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
                 return -1;
@@ -500,9 +496,31 @@ int process_command(int pipe_fd, u_int8_t code) {
             }
             // remove the box
 
-            if (remove_box_command(box_name) < 0) {
+            int32_t return_code = remove_box_command(box_name);
+            u_int8_t op_code = 6;
+            char *answer = create_answer(op_code, return_code, "henloo 2", ANSWER_MESSAGE_SIZE);
+            if (return_code < 0) {
                 return -1;
             }
+
+            // open client pipe
+            int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
+            if (client_pipe_fd < 0) {
+                return -1;
+            }
+
+            fprintf(stdout, "[INFO]: Client pipe fd: %d\n", client_pipe_fd);
+
+            // send the answer to the client
+            if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
+                return -1;
+            }
+
+            // close the client pipe
+            if (close(client_pipe_fd) < 0) {
+                return -1;
+            }
+            
         
             break;
         }
@@ -633,11 +651,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    /*if (pc1_destroy() < 0){
+    /*if (pcq_destroy() < 0){
         return -1;  
     }
     */
-
-    WARN("unimplemented"); // TODO: implement
     return -1;
 }
