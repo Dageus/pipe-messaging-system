@@ -613,6 +613,11 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    /*if (pcp_destroy() < 0){
+        return -1;  
+    }
+    */
+
     WARN("unimplemented"); // TODO: implement
     return -1;
 }
