@@ -33,6 +33,40 @@ int process_command(int pipe_fd, u_int8_t code) {
     // read the message from the pipe
     switch (code)
     {
+    case 4:{                        // response to creation of box
+        u_int32_t return_code;
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, &return_code, sizeof(return_code));
+        if (num_bytes < 0) {        // error
+            return -1;
+        }
+        if (return_code < 0) {     // box not created
+            char error_message[1024];
+            num_bytes = read(pipe_fd, &error_message, sizeof(error_message));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            // maybe print the message (not sure)
+        }
+        break;
+    }
+    case 6:{                        // responde to box removal
+        u_int32_t return_code;
+        ssize_t num_bytes;
+        num_bytes = read(pipe_fd, &return_code, sizeof(return_code));
+        if (num_bytes < 0) {        // error
+            return -1;
+        }
+        if (return_code < 0) {     // box not removed
+            char error_message[1024];
+            num_bytes = read(pipe_fd, &error_message, sizeof(error_message));
+            if (num_bytes < 0) {    // error
+                return -1;
+            }
+            // maybe print the message (not sure)
+        }
+        break;
+    }
     case 8:{                        // list boxes
         u_int8_t last;
         last = 0;
@@ -113,15 +147,15 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
 
 char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsigned int size_of_message) {
     char *message = (char*) malloc(sizeof(char) * size_of_message); // 8 bits from the u_int8_t + 256 bits from the client_named_pipe_path + 32 bits from the box_name
-    long unsigned int current_position = 0;
     memcpy(message, &code, sizeof(u_int8_t));
-    current_position += sizeof(code);
-    memcpy(message + current_position, client_pipe_name, strlen(client_pipe_name));
-    current_position += strlen(client_pipe_name);
+    memcpy(message + 1, client_pipe_name, strlen(client_pipe_name));
+    memset(message + strlen(client_pipe_name) + 1, '\0', 256 - strlen(client_pipe_name));
     if (box_name != NULL)
-        memcpy(message + current_position, box_name, strlen(box_name));
+        memcpy(message + 1 + 256, box_name, strlen(box_name));
     return message;
 }
+
+
 
 /*
  * returns 0 on success, -1 on failure
@@ -174,7 +208,7 @@ int create_box_request(char *named_pipe, char *box_name) {
     char *message = create_message(code, named_pipe, box_name, BOX_MESSAGE_SIZE);
 
     // send this to the mbroker through the named pipe
-    if (write(pipe_fd, message, sizeof(message)) < 0) {
+    if (write(pipe_fd, message, BOX_MESSAGE_SIZE) < 0) {
         fprintf(stderr, "failed: could not write to pipe: %s\n", named_pipe);
         return -1;
     }
@@ -292,6 +326,7 @@ int main(int argc, char **argv) {
             fprintf(stdout, "request was succesful\n");
             break;
         }
+        fprintf(stdout, "waiting for input...\n");
         // continue waiting for input
     }
     // close the pipe and exit

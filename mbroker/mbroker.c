@@ -46,7 +46,7 @@ box_t* get_box_by_publisher_pipe(char* publisher_pipe_name){
     // find the box that has the publisher pipe
     box_list_t* box_node = box_list;
     while (box_node != NULL) {
-        if (strcmp(box_node->box->publisher->named_pipe, publisher_pipe_name) == 0) {
+        if (strcmp(box_node->box->publisher_named_pipe, publisher_pipe_name) == 0) {
             return box_node->box;
         }
         box_node = box_node->next;
@@ -68,10 +68,6 @@ int box_in_list(char* box_name){
 int spread_message(char* message, char* publisher_pipe_name) {
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
-    box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
-    if (box == NULL){
-        return -1;
-    }
 
     // iterate through the subscribers and send message to their pipes
     subscriber_list_t* subscribers = box->subscribers;
@@ -102,16 +98,35 @@ box_t* find_box_by_name(char* box_name) {
     return NULL;
 }
 
+char* create_answer(u_int8_t code, int32_t return_code, char* error_message, unsigned int size_of_answer){
+    char *answer = (char*) malloc(sizeof(char) * size_of_answer); 
+    memcpy(answer, &code, sizeof(u_int8_t));
+    memcpy(answer + 1, return_code, sizeof(int32_t));
+    if (return_code < 0){
+        memcpy(answer + 1 + 4, error_message, strlen(error_message));
+        memset(answer + 1 + 4 + strlen(error_message), '\0', sizeof(char) * (1024 - strlen(error_message)));
+        return answer;
+    }
+    memset(answer + 4 + 1, '\0', sizeof(char) * 1024);
+    return answer;
+}
+
+
 int create_box_command(char* box_name){
     // Verify if the box already exists
     if (find_box_by_name(box_name) != NULL)
         return -1;
 
     // Create the box
+    // IMPORTANT: create the box in the file system
+    int box_fd = tfs_open(box_name, O_CREAT);
+    if (box_fd < 0){
+        return -1;
+    }
     box_t* box = malloc(sizeof(box_t));
     box->box_name = malloc(sizeof(char) * (strlen(box_name) + 1));
     strcpy(box->box_name, box_name);
-    box->publisher = NULL;
+    box->publisher = 0;
     box->subscribers = NULL;
     box->num_subscribers = 0;
 
@@ -156,6 +171,8 @@ int remove_box_command(char* box_name) {
     free(box_node->box);
     free(box_node);
 
+
+
     return 0;
 }
 
@@ -173,7 +190,7 @@ int register_publisher_command(char* client_named_pipe_path, char* box_name) {
     // Create the publisher
     publisher_t* publisher = malloc(sizeof(publisher_t));
     strcpy(publisher->named_pipe, client_named_pipe_path);
-    strcpy(publisher->box_name, box_name);
+    publisher->box = box;
 
     // Add the publisher to the box
     box->publisher = publisher;
@@ -197,14 +214,9 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         box->subscribers->subscriber = subscriber;
         box->subscribers->next = NULL;
     } else {                                    // there are already subscribers
-        subscriber_list_t* subscriber_node = box->subscribers;
-        while (subscriber_node->next != NULL) {
-            subscriber_node = subscriber_node->next;
-        }
         subscriber_list_t* new_subscriber_node = malloc(sizeof(subscriber_list_t));
         new_subscriber_node->subscriber = subscriber;
-        new_subscriber_node->next = NULL;
-        subscriber_node->next = new_subscriber_node;
+        new_subscriber_node->next = box->subscribers;
     }
 
     return 0;
@@ -388,6 +400,7 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
+            // IMPORTANT
             //pthread_t publisher_thread;
             //if (pthread_create(&publisher_thread, NULL, listen_to_publisher, (void*)client_named_pipe_path) < 0) {
             //    return -1;
@@ -423,22 +436,26 @@ int process_command(int pipe_fd, u_int8_t code) {
             // parse the client pipe name
             char client_named_pipe_path[256];
             ssize_t num_bytes;
-            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
             if (num_bytes < 0) { // error
                 return -1;
             }
-            fprintf(stdout, "[INFO]: Client pipe path: %s", client_named_pipe_path);
+            fprintf(stdout, "[INFO]: Client pipe path: %s\n", client_named_pipe_path);
+
             // parse the box name
             char box_name[32];
-            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+            num_bytes = read(pipe_fd, box_name, sizeof(char)*32);
             if (num_bytes < 0) { // error
                 return -1;
             }
 
-            fprintf(stdout, "[INFO]: Box name: %s", box_name);
+            fprintf(stdout, "[INFO]: Box name: %s\n", box_name);
 
             // create the box
-            if (create_box_command(box_name) < 0) {
+            int32_t return_code = create_box_command(box_name);
+            u_int8_t code = 4;
+            char *answer = create_answer(code, return_code, "henlo", ANSWER_MESSAGE_SIZE);
+            if (return_code < 0) {
                 return -1;
             }
 
@@ -533,15 +550,6 @@ void add_box_to_list(char* box_name){
     // add the new box to the list
     box_list->next = new_node(box_name);
 }*/
-
-
-int answer_to_pipe(u_int8_t code, char* client_named_pipe_path){
-    (void) code; // unused parameter
-    (void) client_named_pipe_path; // unused parameter
-    // write to pipe to answer to client
-    
-    return 0;
-}
 
 /*
  * format:

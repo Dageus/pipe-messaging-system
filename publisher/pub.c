@@ -77,7 +77,7 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
  *  - pub <register_pipe_name> <pipe_name> <box_name>
  */
 int main(int argc, char **argv) {
-    if (argc != 3) {
+    if (argc != 4) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
     }

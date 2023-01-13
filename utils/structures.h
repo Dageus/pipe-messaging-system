@@ -6,9 +6,10 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
-#define BOX_MESSAGE_SIZE 296
+#define BOX_MESSAGE_SIZE 289
 #define BOX_LIST_MESSAGE_SIZE 264
 #define MAX_MESSAGE_SIZE 1024
+#define ANSWER_MESSAGE_SIZE 1029
 
 
 // THIS FILE IS COMPLETELY UNNECESSARY, 
@@ -16,14 +17,15 @@
 
 // Structure to hold the state of a subscriber client
 typedef struct {
-    char named_pipe[256];        // File descriptor for the client's named pipe
+    int box_fd;              // File descriptor for the client's named pipe
+    char named_pipe[256];        
     char box_name[32];    // Name of the message box the client is subscribed to
 } subscriber_t;
 
 // Structure to hold the state of a publisher client
 typedef struct {
     char named_pipe[256]; // File descriptor for the client's named pipe
-    char box_name[32]; // Name of the message box the client is publishing to
+    box_t* box;
 } publisher_t;
 
 typedef struct subscriber_list_t{
@@ -33,8 +35,8 @@ typedef struct subscriber_list_t{
 
 typedef struct {
     char* box_name;
-    publisher_t* publisher;
     subscriber_list_t* subscribers;
+    char *publisher_named_pipe;
     u_int64_t num_subscribers;
 } box_t;
 
