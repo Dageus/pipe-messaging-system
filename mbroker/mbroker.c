@@ -34,16 +34,47 @@ box_list_t *box_list = NULL;
 // IMPORTANT: 
 // - functions to implement yet:
 
-box_t* get_box_by_publisher();
 
-int spread_message(char* message, box_t* box) {
+int end_session(){
+    // IMPORTANT
+}
+// if a box is removed by the manager or a client closes their named pipe
+// subtract 1 to the open sessions
+
+box_t* get_box_by_publisher_pipe(char* publisher_pipe_name){
+    // find the box that has the publisher pipe
+    box_list_t* box_node = box_list;
+    while (box_node != NULL) {
+        if (strcmp(box_node->box->publisher->named_pipe, publisher_pipe_name) == 0) {
+            return box_node->box;
+        }
+        box_node = box_node->next;
+    }
+    return NULL;
+}
+
+int spread_message(char* message, char* publisher_pipe_name) {
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
+    box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
+    if (box == NULL){
+        return -1;
+    }
 
     // iterate through the subscribers and send message to their pipes
-    subscriber_list_t* subscriber = box->subscribers;
-
-
+    subscriber_list_t* subscribers = box->subscribers;
+    while (subscribers != NULL) {
+        int pipe_fd = open(subscribers->subscriber->named_pipe, O_WRONLY);
+        if (pipe_fd < 0) {
+            return -1;
+        }
+        ssize_t num_bytes;
+        num_bytes = write(pipe_fd, message, strlen(message));
+        if (num_bytes < 0) {
+            return -1;
+        }
+        subscribers = subscribers->next;
+    }
 
     return 0;
 }
@@ -59,7 +90,7 @@ box_t* find_box_by_name(char* box_name) {
     return NULL;
 }
 
-int creat_box(char* box_name){
+int create_box(char* box_name){
     // Verify if the box already exists
     if (find_box_by_name(box_name) != NULL)
         return -1;
@@ -129,7 +160,7 @@ int register_publisher_command(char* client_named_pipe_path, char* box_name) {
 
     // Create the publisher
     publisher_t* publisher = malloc(sizeof(publisher_t));
-    publisher->client_fd = client_named_pipe_path;
+    strcpy(publisher->named_pipe, client_named_pipe_path);
     strcpy(publisher->box_name, box_name);
 
     // Add the publisher to the box
@@ -146,7 +177,7 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
 
     // add the subscriber to the box
     subscriber_t* subscriber = malloc(sizeof(subscriber_t));
-    subscriber->client_fd = client_named_pipe_path;
+    strcpy(subscriber->named_pipe, client_named_pipe_path);
     strcpy(subscriber->box_name, box_name);
 
     if (box->subscribers == NULL) {   // no subscribers yet
@@ -158,15 +189,14 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         while (subscriber_node->next != NULL) {
             subscriber_node = subscriber_node->next;
         }
-        subscriber_node->next = subscriber;
+        subscriber_list_t* new_subscriber_node = malloc(sizeof(subscriber_list_t));
+        new_subscriber_node->subscriber = subscriber;
+        new_subscriber_node->next = NULL;
+        subscriber_node->next = new_subscriber_node;
     }
 
     return 0;
 }
-
-int end_session(); 
-// if a box is removed by the manager or a client closes their named pipe
-// subtract 1 to the open sessions
 
 
 // completed functions
@@ -174,59 +204,143 @@ int end_session();
 
 // message format:
 //[ code = 8 (uint8_t) ] | [ last (uint8_t) ] | [ box_name (char[32]) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
-int create_listing_message(box_list_t* box_node) {
+char* create_listing_message(box_list_t* box_node) {
     // create the message
+    char message[56]; // 1 + 1 + 32 + 8 + 8 + 8 = 56 bytes
 
     // code
     u_int8_t code = 8;
+    memcpy(message, &code, sizeof(code));
     
     // last
     u_int8_t last = 0;
     if (box_node->next == NULL) {
         last = 1;
     }
+    memcpy(message, &last, sizeof(last));
     
     // box_name
-    char box_name[32];
-    strcpy(box_name, box_node->box->box_name);
+    memcpy(message, box_node->box->box_name, sizeof(box_node->box->box_name));
 
     // box_size
     u_int64_t box_size = sizeof(box_node->box);
+    memcpy(message, &box_size, sizeof(box_size));
 
     // n_publishers
     u_int64_t n_publishers = 0;
     if (box_node->box->publisher != NULL) {
         n_publishers = 1;
     }
+    memcpy(message, &n_publishers, sizeof(n_publishers));
 
     // n_subscribers
     u_int64_t n_subscribers = box_node->box->num_subscribers;
+    memcpy(message, &n_subscribers, sizeof(n_subscribers));
 
-    // send the message to the pipe
-    // write(pipe_fd, message, sizeof(message));
-
-    return 0;
+    return message;
 }
 
 
 //This function is very incomplete and possibly right now it only iterates through the boxes and creates a message
 //for each box. It does not send the message to the pipe.
-int list_boxes_command(){
+int list_boxes_command(char* manager_pipe_name){
     // list all the boxes in the list
     // return 0 if success, -1 if error
+
+    int pipe_fd = open(manager_pipe_name, O_WRONLY);
+    if (pipe_fd < 0) {
+        fprintf(stderr, "failed: could not open pipe: %s\n", manager_pipe_name);
+        return -1;
+    }
 
     // iterate through the boxes and creat a message for each box
     box_list_t* box_node = box_list;
     while (box_node != NULL) {
-        create_listing_message(box_node);
+        char* message = create_listing_message(box_node);
+        if (write(pipe_fd, message, sizeof(message)) < 0) {
+            fprintf(stderr, "failed: could not write to pipe: %s\n", manager_pipe_name);
+            return -1;
+        }
+        box_node = box_node->next;
+    }
+
+    // close the pipe
+    if (close(pipe_fd) == -1) {
+        fprintf(stderr, "failed: could not close pipe: %s\n", manager_pipe_name);
+        return -1;
     }
 
     return 0;
 }
 
+// this function is the one that will be used in case the publisher sends a messaggge
+int pub_to_box(char *box_name) {
+    // check if box exists
+    if (!box_in_list(box_name)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_named_pipe){
+    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+    if (sel < 0) {
+        return -1;
+    } else {
+        // data is available on the named pipe
+        // read the data from the pipe
+        u_int8_t code;
+        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        if (num_bytes == 0) {
+            // num_bytes == 0 indicates EOF
+            fprintf(stderr, "[INFO]: pipe closed\n");
+            return 0;
+        } else if (num_bytes == -1) {
+            // num_bytes == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        if (code == 9){
+            char message[1024];
+            ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
+            if (num_bytes < 0) { // error
+                return -1;
+            }
+            // send the message to all the subscribers of the box
+            if (spread_message(message, publisher_named_pipe) < 0) {
+                return -1;
+            }
+        }
+
+    }
+
+    return 0;
+}
+
+int listen_to_publisher(char* publisher_named_pipe){
+    // listen to the publisher, the same way as manager.c and sub.c
+    int pipe_fd = open(publisher_named_pipe, O_RDONLY);
+    if (pipe_fd < 0) {
+        return -1;
+    }
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
+    while(true){
+        // read the message from the pipe
+        // send the message to the subscribers
+        if (read_publisher_pipe_input(pipe_fd, read_fds, publisher_named_pipe) < 0) {
+            return -1;
+        } else{
+            // send the message to the subscribers
+        }
+    }
+}
+
 int process_command(int pipe_fd, u_int8_t code) {
-
-
     // read the message from the pipe
     switch (code)
     {
@@ -248,6 +362,17 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
                 return -1;
             }
+
+            // listen to the publisher on his pipe in a new thread
+            if (listen_to_publisher(client_named_pipe_path) < 0) {
+                return -1;
+            }
+
+            //pthread_t publisher_thread;
+            //if (pthread_create(&publisher_thread, NULL, listen_to_publisher, (void*)client_named_pipe_path) < 0) {
+            //    return -1;
+            //}
+            // ↑↑↑↑↑↑ inutil, copilot é que fez
 
             break;
         }
@@ -335,21 +460,6 @@ int process_command(int pipe_fd, u_int8_t code) {
         
             break;
         }
-        // publisher sends a message
-        case 9:{
-            // read the message from the pipe
-            char message[1024];
-            ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
-            if (num_bytes < 0) { // error
-                return -1;
-            }
-            // send the message to all the subscribers of the box
-            if (spread_message(message) < 0) {
-                return -1;
-            }
-        
-            break;
-        }
         default:                // invalid command
             return -1;
     }
@@ -376,9 +486,6 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
-
-        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
-        fprintf(stdout, "[INFO]: code: %d\n", code);
 
         if (process_command(pipe_fd, code) < 0) {
             return -1;
@@ -418,30 +525,6 @@ int answer_to_pipe(u_int8_t code, char* client_named_pipe_path){
     return 0;
 }
 
-int create_box(char *box_name) {
-    // check if box already exists
-    if (box_list == NULL) {
-        tfs_open(box_name, O_CREAT);
-        box_list = new_node(box_name);
-    } else {
-        // check if box is already in the list
-        if (!box_in_list(box_name)) {
-            // add box to the list
-            add_box_to_list(box_name);
-        }
-    }
-    return 0;
-}
-
-int pub_to_box(char *box_name) {
-    // check if box exists
-    if (!box_in_list(box_name)) {
-        return -1;
-    }
-
-    return 0;
-}
-
 /*
  * format:
  *  - mbroker <register_pipe_name> <max_sessions>
@@ -465,18 +548,15 @@ int main(int argc, char **argv) {
     
     // unlink register_pipe_name if it already exists
     if (unlink(mbroker->register_pipe_name) < 0) {
-        perror("unlink");
         return -1;
     }
     // create the named pipe
     if (mkfifo(mbroker->register_pipe_name, 0666) < 0) {
-        perror("mkfifo");
         return -1;
     }
 
     int pipe_fd = open(mbroker->register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
-        perror("open");
         return -1;
     }
 
