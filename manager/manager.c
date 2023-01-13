@@ -34,7 +34,7 @@ int process_command(int pipe_fd, u_int8_t code) {
     switch (code)
     {
     case 4:{                        // response to creation of box
-        u_int32_t return_code;
+        int32_t return_code;
         ssize_t num_bytes;
         num_bytes = read(pipe_fd, &return_code, sizeof(return_code));
         if (num_bytes < 0) {        // error
@@ -51,7 +51,7 @@ int process_command(int pipe_fd, u_int8_t code) {
         break;
     }
     case 6:{                        // responde to box removal
-        u_int32_t return_code;
+        int32_t return_code;
         ssize_t num_bytes;
         num_bytes = read(pipe_fd, &return_code, sizeof(return_code));
         if (num_bytes < 0) {        // error

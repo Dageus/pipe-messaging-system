@@ -105,7 +105,7 @@ box_t* find_box_by_name(char* box_name) {
 char* create_answer(u_int8_t code, int32_t return_code, char* error_message, unsigned int size_of_answer){
     char *answer = (char*) malloc(sizeof(char) * size_of_answer); 
     memcpy(answer, &code, sizeof(u_int8_t));
-    memcpy(answer + 1, return_code, sizeof(int32_t));
+    memcpy(answer + 1, &return_code, sizeof(int32_t));
     if (return_code < 0){
         memcpy(answer + 1 + 4, error_message, strlen(error_message));
         memset(answer + 1 + 4 + strlen(error_message), '\0', sizeof(char) * (1024 - strlen(error_message)));
@@ -121,16 +121,19 @@ int create_box_command(char* box_name){
     if (find_box_by_name(box_name) != NULL)
         return -1;
 
+    fprintf(stderr, "Creating box %s", box_name);
+
     // Create the box
-    // IMPORTANT: create the box in the file system
-    int box_fd = tfs_open(box_name, O_CREAT);
+    int box_fd = tfs_unlink(box_name);
+    box_fd = tfs_open(box_name, O_CREAT);
     if (box_fd < 0){
         return -1;
     }
+    fprintf(stderr, "Box %s created", box_name);
 
     // Add the box to the list
     box_list_t* box_node = new_node(box_name);
-    while (box_list != NULL){
+    while (box_list->next != NULL){
         box_list = box_list->next;
     }
     box_list->next = box_node;
@@ -452,9 +455,27 @@ int process_command(int pipe_fd, u_int8_t code) {
 
             // create the box
             int32_t return_code = create_box_command(box_name);
-            u_int8_t code = 4;
-            char *answer = create_answer(code, return_code, "henlo", ANSWER_MESSAGE_SIZE);
+            u_int8_t op_code = 4;
+            char *answer = create_answer(op_code, return_code, "henlo", ANSWER_MESSAGE_SIZE);
             if (return_code < 0) {
+                return -1;
+            }
+
+            fprintf(stdout, "[INFO]: Answer: %s\n", answer);
+
+            // open client pipe
+            int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
+            if (client_pipe_fd < 0) {
+                return -1;
+            }
+
+            // send the answer to the client
+            if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
+                return -1;
+            }
+
+            // close the client pipe
+            if (close(client_pipe_fd) < 0) {
                 return -1;
             }
 

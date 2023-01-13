@@ -4,7 +4,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
+
 
 #define BOX_MESSAGE_SIZE 289
 #define BOX_LIST_MESSAGE_SIZE 264
@@ -50,7 +52,7 @@ box_list_t* new_node(char* box_name){
     strcpy(box_node->box->box_name, box_name);
     box_node->box->publisher_named_pipe = NULL;
     box_node->box->subscribers = NULL;
-    box_node->box->num_subscribers = NULL;
+    box_node->box->num_subscribers = 0;
     box_node->next = NULL;
     return box_node;
 }
