@@ -126,4 +126,8 @@ typedef struct {
 //    char message[1024]; 
 //} subscriber_message;
 
+typedef struct {
+    void *func;
+    void *arg; 
+} session;
 #endif
