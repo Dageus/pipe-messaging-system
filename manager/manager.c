@@ -114,8 +114,7 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
 char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsigned int size_of_message) {
     char *message = (char*) malloc(sizeof(char) * size_of_message); // 8 bits from the u_int8_t + 256 bits from the client_named_pipe_path + 32 bits from the box_name
     long unsigned int current_position = 0;
-    fprintf(stderr, "code: %d\n", code);
-    memcpy(message, &code, sizeof(code));
+    memcpy(message, &code, sizeof(u_int8_t));
     current_position += sizeof(code);
     memcpy(message + current_position, client_pipe_name, strlen(client_pipe_name));
     current_position += strlen(client_pipe_name);
@@ -130,7 +129,6 @@ char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsi
 int list_boxes_request(char* named_pipe) {
     // list boxes in mbroker
     
-
     // open the pipe
     int pipe_fd = open(named_pipe, O_WRONLY);
     if (pipe_fd < 0) {

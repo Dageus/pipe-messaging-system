@@ -310,7 +310,6 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
     } else {
         // data is available on the named pipe
         // read the data from the pipe
-        fprintf(stderr, "data is available on the named pipe\n");
         u_int8_t code;
         ssize_t num_bytes;
         num_bytes = read(pipe_fd, &code, sizeof(code));
@@ -428,18 +427,22 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) { // error
                 return -1;
             }
+            fprintf(stdout, "[INFO]: Client pipe path: %s", client_named_pipe_path);
             // parse the box name
             char box_name[32];
             num_bytes = read(pipe_fd, box_name, sizeof(box_name));
             if (num_bytes < 0) { // error
                 return -1;
             }
+
+            fprintf(stdout, "[INFO]: Box name: %s", box_name);
+
             // create the box
             if (create_box_command(box_name) < 0) {
                 return -1;
             }
 
-            fprintf(stdout, "[INFO]: Box %s created", box_name);
+            fprintf(stdout, "[INFO]: Box %s created\n", box_name);
 
             break;
         }
@@ -483,8 +486,10 @@ int process_command(int pipe_fd, u_int8_t code) {
         
             break;
         }
-        default:                // invalid command
+        default:{                // invalid command
+            fprintf(stderr, "[ERR]: Invalid command code: %d\n", code);
             return -1;
+        }
     }
 
     return 0;
@@ -509,6 +514,7 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
             exit(EXIT_FAILURE);
         }
 
+        fprintf(stderr, "[INFO]: Received command code: %d\n", code);
         if (process_command(pipe_fd, code) < 0) {
             return -1;
         }
@@ -590,10 +596,6 @@ int main(int argc, char **argv) {
         if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
-        }
-        if (read_pipe_input(pipe_fd, read_fds) == 5){
-            // close the session
-            return 0;
         }
     
     }
