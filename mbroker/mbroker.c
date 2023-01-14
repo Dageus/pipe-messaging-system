@@ -677,6 +677,20 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
     return 0;
 }
 
+void *session_thread(void *arg) {
+     while (true) {
+        // dequeue an element from the queue
+        void* elem = pcq_dequeue(pc_queue);
+
+        // process the element
+        process_client_request(elem);  // this is a function you would have to implement to process the request
+
+        // free the memory allocated to the element
+        free(elem);
+    }
+    return NULL;
+}
+
 /*
  * format:
  *  - mbroker <register_pipe_name> <max_sessions>
@@ -701,7 +715,6 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-
     // initialize the pcq
     pc_queue = malloc(sizeof(pc_queue_t));
 
@@ -712,6 +725,9 @@ int main(int argc, char **argv) {
 
     // initialize the session threads
     thread_array = malloc(sizeof(pthread_t) * mbroker->max_sessions);   // array of threads
+    for (int i = 0; i < mbroker->max_sessions; i++) {
+        thread_array[i] = pthread_create(&thread_array[i], NULL, session_thread, NULL);
+    }
 
     // unlink register_pipe_name if it already exists
     if (unlink(mbroker->register_pipe_name) < 0 && errno != ENOENT) {
