@@ -164,10 +164,11 @@ int main(int argc, char **argv) {
     FD_ZERO(&read_fds);
     FD_SET(pipe_fd, &read_fds);
 
+    signal(SIGINT, sigint_handler); // register the SIGINT handler
+    
     while (!stop) {
         // wait for data to be available on the named pipe
 
-        signal(SIGINT, sigint_handler); // register the SIGINT handler
         
         if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
