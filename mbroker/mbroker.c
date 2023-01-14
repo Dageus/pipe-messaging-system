@@ -41,7 +41,7 @@ pthread_mutex_t mutex;  // define the mutex
 // subtract 1 to the open sessions
 
 box_t* get_box_by_publisher_pipe(char* publisher_pipe_name) {
-    pthread_mutex_lock(&mutex); // lock the mutex
+    //pthread_mutex_lock(&mutex); // lock the mutex
     // find the box that has the publisher pipe
     box_list_t* box_node = box_list;
     while (box_node != NULL) {
@@ -71,20 +71,25 @@ int box_in_list(char* box_name){
 
 
 char* create_message(u_int8_t code, char* message_to_write){
+    pthread_mutex_lock(&mutex); // lock the mutex
     char *message = (char*) malloc(sizeof(char) * 1025);
     memcpy(message, &code, sizeof(u_int8_t));
     memcpy(message + 1, message_to_write, strlen(message_to_write));
     memset(message + 1 + strlen(message_to_write), '\0', 1024 - strlen(message_to_write));
+    pthread_mutex_unlock(&mutex); // unlock the mutex
     return message;
 }
+
 
 int spread_message(char* message_to_write, char* publisher_pipe_name) {
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
+    fprintf(stderr, "[INFO]: Spreading message...\n");
     box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
     if (box == NULL) {  // if the box does not exist
         return -1;
     }
+    fprintf(stderr, "[INFO]: Box found: %s\n", box->box_name);
 
     // iterate through the subscribers and send message to their pipes
     subscriber_list_t* subscribers = box->subscribers;
@@ -184,8 +189,6 @@ int remove_box_command(char* box_name) {
     free(box_node->box->box_name);
     free(box_node->box);
     free(box_node);
-
-
 
     return 0;
 }
@@ -379,14 +382,16 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
     } else {
         // data is available on the named pipe
         // read the data from the pipe
-        pthread_mutex_lock(&mutex);   // lock the mutex
+        fprintf(stderr, "[INFO]: data is available on the named pipe\n");
+        //pthread_mutex_lock(&mutex);   // lock the mutex
         u_int8_t code;
         ssize_t num_bytes;
         num_bytes = read(pipe_fd, &code, sizeof(code));
+        fprintf(stderr, "num_bytes: %ld\n", num_bytes);
         if (num_bytes == 0) {
             // num_bytes == 0 indicates EOF
             pthread_mutex_unlock(&mutex);  // unlock the mutex
-            return 0;
+            return 1;
         } else if (num_bytes == -1) {
             // num_bytes == -1 indicates error
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
@@ -413,6 +418,8 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
                 return -1;
             }
 
+            fprintf(stderr, "[INFO]: spreading messages\n");
+
             // send the message to all the subscribers of the box
             if (spread_message(message, publisher_named_pipe) < 0) {
                 pthread_mutex_unlock(&mutex);  // unlock the mutex
@@ -432,17 +439,21 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
         return -1;
     }
 
+    fprintf(stderr, "[INFO]: pipe_fd: %d\n", pipe_fd);
+
     fd_set read_fds;
     FD_ZERO(&read_fds);
     FD_SET(pipe_fd, &read_fds);
     while(true){
+        fprintf(stderr, "[INFO]: listening to publisher\n");
         pthread_mutex_lock(&mutex);   // lock the mutex
         // read the message from the pipe
         // send the message to the subscribers
-        if (read_publisher_pipe_input(pipe_fd, read_fds, publisher_named_pipe, box_name) < 0) {
+        int ret = read_publisher_pipe_input(pipe_fd, read_fds, publisher_named_pipe, box_name);
+        if (ret < 0) {
             pthread_mutex_unlock(&mutex);  // unlock the mutex
             return -1;
-        } else {
+        } else if (ret == 1){
             pthread_mutex_unlock(&mutex);  // unlock the mutex
             break;
         }
