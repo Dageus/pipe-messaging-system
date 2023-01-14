@@ -9,6 +9,10 @@
         "structures.h": "c",
         "unistd.h": "c",
         "fcntl.h": "c",
-        "struct_iovec.h": "c"
+        "struct_iovec.h": "c",
+        "stdlib.h": "c",
+        "state.h": "c",
+        "messages.h": "c",
+        "producer-consumer.h": "c"
     }
 }

@@ -131,5 +131,5 @@ typedef struct {
 typedef struct {
     void *func;
     void *arg; 
-} session;
+} session_t;
 #endif

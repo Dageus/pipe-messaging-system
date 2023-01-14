@@ -3,7 +3,7 @@
 #include "messages.h"
 #include "operations.h"
 #include "state.h"
-//#include "producer-consumer.h"
+#include "producer-consumer.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -678,14 +678,19 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
  *  - mbroker <register_pipe_name> <max_sessions>
  */
 int main(int argc, char **argv) {
+    
+    if (argc != 3) {
+        fprintf(stderr, "failed: not enough arguments\n");
+        return -1;
+    }
 
     if (tfs_init(NULL) < 0) {
         fprintf(stderr, "failed: could not initialize tfs\n");
         return -1;
     }
 
-    if (argc != 3) {
-        fprintf(stderr, "failed: not enough arguments\n");
+    if (pcq_create() < 0) {
+        fprintf(stderr, "failed: could not initialize pcq\n");
         return -1;
     }
 
@@ -741,9 +746,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    /*if (pcq_destroy() < 0){
+    if (pcq_destroy() < 0){
+        fprintf(stderr, "failed: could not destroy pcq\n");
         return -1;  
     }
-    */
     return -1;
 }
