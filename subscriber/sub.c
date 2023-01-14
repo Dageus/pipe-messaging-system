@@ -33,11 +33,11 @@
 */
 
 int messages_received = 0;  // number of messages received by the subscriber
-int interrupted = 0;        // flag to track if the program has been interrupted
+volatile sig_atomic_t stop = 0;
 
-void sigint_handler(int sig) {
-    (void)sig; // suppress unused parameter warning
-    interrupted = 1;
+void sigint_handler(int signum) {
+    (void)signum;
+    stop = 1;
 }
 
 int read_pipe_input(int pipe_fd, fd_set read_fds) {
@@ -132,8 +132,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
     }
- 
-    signal(SIGINT, sigint_handler); // register the SIGINT handler
 
     char* register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the subscriber wants to connect to
     char* pipe_name = argv[2];          // pipe_name is the name of the pipe to which the subscriber wants to connect to
@@ -166,7 +164,7 @@ int main(int argc, char **argv) {
     FD_ZERO(&read_fds);
     FD_SET(pipe_fd, &read_fds);
 
-    while (!interrupted) {
+    while (!stop) {
         // wait for data to be available on the named pipe
 
         signal(SIGINT, sigint_handler); // register the SIGINT handler
