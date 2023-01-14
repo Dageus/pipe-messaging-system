@@ -71,8 +71,10 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
     }
 
     u_int8_t code = 1;
+    fprintf(stderr, "[INFO]: signing to box: %s\n", box_name);
     char* message = create_message(code, pipe_name, box_name);
-    if (write(pipe_fd, message, strlen(message)) < 0) { // error
+    fprintf(stderr, "[INFO]: sending message: %s with len %ld\n", message, strlen(message));
+    if (write(pipe_fd, message, 289) < 0) { // error
         return -1;
     }
 
@@ -114,7 +116,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    int pipe_fd = open(register_pipe_name, O_RDONLY);
+    int pipe_fd = open(pipe_name, O_WRONLY);
     if (pipe_fd < 0) {
         return -1;
     }
@@ -123,6 +125,7 @@ int main(int argc, char **argv) {
     FD_ZERO(&read_fds);
     FD_SET(pipe_fd, &read_fds);
 
+    fprintf(stderr, "[INFO]: waiting for input from stdin\n");
     while (true) {
         // wait for input from user in stdin
         char message[1024];

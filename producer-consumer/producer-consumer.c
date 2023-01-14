@@ -23,7 +23,6 @@
 
 // functions from producer-consumer.h
 int pcq_create(pc_queue_t *queue, size_t capacity) {
-    pc_queue_t* queue = (pc_queue_t*) malloc(sizeof(pc_queue_t));
     queue->pcq_capacity = capacity;
     queue->pcq_current_size = 0;
     queue->pcq_head = 0;

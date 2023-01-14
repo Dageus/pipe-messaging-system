@@ -361,6 +361,7 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
     } else {
         // data is available on the named pipe
         // read the data from the pipe
+        fprintf(stderr, "data is available on the named pipe\n");
         u_int8_t code;
         ssize_t num_bytes;
         num_bytes = read(pipe_fd, &code, sizeof(code));
@@ -372,6 +373,8 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
+
+        fprintf(stderr, "code: %d\n", code);
 
         if (code == 9){
             char message[1024];
@@ -403,6 +406,8 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
         return -1;
     }
 
+    fprintf(stderr, "[INFO] opened pipe with fd: %d\n", pipe_fd);
+
     fd_set read_fds;
     FD_ZERO(&read_fds);
     FD_SET(pipe_fd, &read_fds);
@@ -430,6 +435,7 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) { // error
                 return -1;
             }
+            fprintf(stdout, "[INFO]: client_named_pipe_path: %s\n", client_named_pipe_path);
             // parse the box name
             char box_name[32];
             num_bytes = read(pipe_fd, box_name, sizeof(box_name));
@@ -441,7 +447,7 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
-            
+            fprintf(stdout, "[INFO]: publisher registered\n");
 
             // listen to the publisher on his pipe in a new thread
             if (listen_to_publisher(client_named_pipe_path, box_name) < 0) {
@@ -664,6 +670,7 @@ int main(int argc, char **argv) {
     mbroker->register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
     mbroker->max_sessions = atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
     
+
     // unlink register_pipe_name if it already exists
     if (unlink(mbroker->register_pipe_name) < 0) {
         return -1;
@@ -678,6 +685,12 @@ int main(int argc, char **argv) {
     } else {
         fprintf(stderr, "[INFO]: named pipe created\n");
     }
+
+    // initialize all the session threads
+    //for (int i = 0; i < mbroker->max_sessions; i++) {
+    //    mbroker->session_threads[i] = NULL;
+    //} dummy code
+
 
     int pipe_fd = open(mbroker->register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
