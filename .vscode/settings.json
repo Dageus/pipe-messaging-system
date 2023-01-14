@@ -13,6 +13,7 @@
         "stdlib.h": "c",
         "state.h": "c",
         "messages.h": "c",
-        "producer-consumer.h": "c"
+        "producer-consumer.h": "c",
+        "types.h": "c"
     }
 }

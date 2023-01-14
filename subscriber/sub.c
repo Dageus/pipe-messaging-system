@@ -168,8 +168,6 @@ int main(int argc, char **argv) {
     
     while (!stop) {
         // wait for data to be available on the named pipe
-
-        
         if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
@@ -178,6 +176,12 @@ int main(int argc, char **argv) {
 
     // close the named pipe
     close(pipe_fd);
+
+    // remove the named pipe
+    if (unlink(pipe_name) < 0) {
+        fprintf(stderr, "failed: could not remove pipe: %s\n", pipe_name);
+        return -1;
+    }
 
     // print the number of messages received
     fprintf(stdout, "received %d messages\n", messages_received);

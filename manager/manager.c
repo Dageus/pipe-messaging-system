@@ -228,8 +228,6 @@ int create_box_request(char* register_pipe_name, char *named_pipe, char *box_nam
  * returns 0 on success, -1 on failure
 */
 int remove_box(char* register_pipe_name, char *named_pipe, char *box_name) {
-   // use memcpy to copy the CLIENT_PIPE_PATH + client_pipe_num to the client_pipe_name
-
     // open the pipe
     int pipe_fd = open(register_pipe_name, O_WRONLY);
     if (pipe_fd < 0) {
@@ -328,11 +326,18 @@ int main(int argc, char **argv) {
         fprintf(stdout, "waiting for input...\n");
         // continue waiting for input
     }
+
     // close the pipe and exit
     if (close(pipe_fd) == -1) {
         fprintf(stderr, "failed: could not close pipe: %s\n", pipe_name);
         return -1;
     }
-    fprintf(stderr, "closed pipe: %s\n", pipe_name);
+
+    // remove the named pipe
+    if (unlink(pipe_name) < 0) {
+        fprintf(stderr, "failed: could not remove pipe: %s\n", pipe_name);
+        return -1;
+    }
+
     return 0;
 }

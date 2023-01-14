@@ -149,5 +149,11 @@ int main(int argc, char **argv) {
     // close the named pipe
     close(pipe_fd);
 
+    // remove the named pipe
+    if (unlink(pipe_name) < 0) {
+        fprintf(stderr, "failed: could not remove pipe: %s\n", pipe_name);
+        return -1;
+    }
+
     return 0;
 }

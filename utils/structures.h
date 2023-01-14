@@ -13,9 +13,18 @@
 #define MAX_MESSAGE_SIZE 1024
 #define ANSWER_MESSAGE_SIZE 1029
 
+// op_codes
+#define OP_CODE_REGISTER_PUBLISHER  1
+#define OP_CODE_REGISTER_SUBSCRIBER 2
+#define OP_CODE_REGISTER_BOX        3
+#define OP_CODE_ANSWER_TO_CREATION  4
+#define OP_CODE_BOX_REMOVAL         5
+#define OP_CODE_ANSWER_TO_REMOVAL   6
+#define OP_CODE_BOX_LIST            7
+#define OP_CODE_ANSWER_TO_LIST      8
+#define OP_CODE_PUBLISHER_MESSAGE   9
+#define OP_CODE_SUBSCRIBER_MESSAGE  10
 
-// THIS FILE IS COMPLETELY UNNECESSARY, 
-// BUT I DID IT JUST TO MAKE IT MORE ORGANIZED
 
 // Structure to hold the state of a subscriber client
 typedef struct {
@@ -64,69 +73,6 @@ typedef struct {
     char* register_pipe_name;            // Path to the server's named pipe
     size_t max_sessions;                    // Maximum number of concurrent sessions
 } mbroker_t;
-
-// COMMANDS:
-
-typedef struct {
-    u_int8_t code;                       // code = 1
-    char client_named_pipe_path[256];
-    char box_name[32];
-} publisher_register;
-
-typedef struct {
-    u_int8_t code;                       // code = 2
-    char client_named_pipe_path[256];
-    char box_name[32];
-} subscriber_register;
-
-typedef struct {
-    u_int8_t code;                       // code = 3
-    char client_named_pipe_path[256];
-    char box_name[32];
-} box_creation_request;
-
-typedef struct {
-    u_int8_t code;                       // code = 4
-    int32_t return_code;                 // 0 = success, -1 = error
-    char error_message[1024];            // if return_code == -1 sends message, else send empty string
-} box_creation_response;
-
-typedef struct {
-    u_int8_t code;                       // code = 5
-    char client_named_pipe_path[256];
-    char box_name[32];
-} box_removal_request;
-
-typedef struct {
-    u_int8_t code;                       // code = 6
-    int32_t return_code;                 // 0 = success, -1 = error
-    char error_message[1024];            // if return_code == -1 sends message, else send empty string
-} box_removal_response;
-
-typedef struct {
-    u_int8_t code;                       // code = 7
-    char client_named_pipe_path[256];
-} box_list_request;
-
-typedef struct {
-    u_int8_t code;                       // code = 8
-    u_int8_t last;                       // 1 if it´s the last box, 0 if there are more boxes
-    char box_name[32];                   // if return_code == 1 sends message, else send empty string
-    u_int64_t box_size;                  // size of the box
-    u_int64_t n_publishers;              // number of messages in the box
-    u_int64_t n_subscribers;             // number of subscribers
-} box_list_message;
-
-// additional structss
-typedef struct {
-    u_int8_t code;                      // code = 9
-    char message[1024]; 
-} publisher_message;
-
-//typedef struct {                        // code = 10
-//    u_int8_t code;
-//    char message[1024]; 
-//} subscriber_message;
 
 typedef struct {
     void *func;
