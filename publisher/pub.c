@@ -11,36 +11,15 @@
 #include <sys/select.h>
 #include <errno.h>
 
-
-/*
- * - publisher asks to join a server in the mbroker, citing the box name to which its gonna write to
- *
- * - mbroker creates a pipe for the publisher to write to
- * 
- * - if the connection is accepted by the mbroker, the client reads from the stdin and writes to the pipe
- * 
- * - each line corresponds to a message 
- * 
- * - it must not include a '\n' character, only the '\0' character
- * 
- * - if the publisher receives a SIGINT, it must close the pipe and exit
- * 
- * - the named pipe must be removed when the publisher exits
- * 
- */
-
-/*
- * returns 0 on success, -1 on failure
-*/
 int send_message(int pipe_fd, char const *message_written) {
-    // IMPORTANT: move this code to another function
-    u_int8_t code = 9;
+    u_int8_t code = OP_CODE_PUBLISHER_MESSAGE;
     char* message = malloc(sizeof(char) * 1025);
     memcpy(message, &code, sizeof(u_int8_t));
     memcpy(message + sizeof(u_int8_t), message_written, strlen(message_written));
     memset(message + sizeof(u_int8_t) + strlen(message_written), '\0', 1024 - strlen(message_written));
 
     if (write(pipe_fd, message, 1025) < 0) { // error
+        fprintf(stderr, "[ERROR]: could not write to pipe\n");
         return -1;
     }
 
@@ -57,24 +36,22 @@ char* create_message(u_int8_t code, char const *pipe_name, char const *box_name)
     return message;
 }
 
-/*
- * returns 0 on success, -1 on failure
-*/
 int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
     int pipe_fd = open(register_pipe_name, O_WRONLY);
     if (pipe_fd < 0) { // error
+        fprintf(stderr, "[ERROR]: could not open register pipe\n");
         return -1;
     }
 
-    u_int8_t code = 1;
-    fprintf(stderr, "[INFO]: signing to box: %s\n", box_name);
+    u_int8_t code = OP_CODE_REGISTER_PUBLISHER;
     char* message = create_message(code, pipe_name, box_name);
-    fprintf(stderr, "[INFO]: sending message: %s with len %ld\n", message, strlen(message));
     if (write(pipe_fd, message, 289) < 0) { // error
+        fprintf(stderr, "[ERROR]: could not write to register pipe\n");
         return -1;
     }
     
     if (close(pipe_fd) < 0) { // error
+        fprintf(stderr, "[ERROR]: could not close register pipe\n");
         return -1;
     }
 
@@ -104,10 +81,6 @@ int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
     return 0;
 }
 
-/*
- * format:
- *  - pub <register_pipe_name> <pipe_name> <box_name>
- */
 int main(int argc, char **argv) {
     if (argc != 4) {
         fprintf(stderr, "failed: not enough arguments\n");
@@ -127,8 +100,6 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
-
     if (mkfifo(pipe_name, 0666) < 0) {
         fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
         return -1;
@@ -144,12 +115,10 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    fprintf(stderr, "[INFO]: waiting for input from stdin\n");
     while (true) {
         // wait for input from user in stdin
         char message[1024];
         if (fgets(message, sizeof(message), stdin) == NULL) {
-            fprintf(stdout, "[INFO]: received EOF, exiting as per request of the client\n");
             // received an EOF, exit
             break;
         }
@@ -160,8 +129,6 @@ int main(int argc, char **argv) {
             // fill the rest of the message with '\0'
             memset(message + strlen(message), '\0', MAX_MESSAGE_SIZE - strlen(message));
         }
-
-        fprintf(stderr, "[INFO]: sending message: %s\n", message);
 
         if (send_message(pipe_fd, message) < 0) {
             fprintf(stderr, "failed: could not send message\n");

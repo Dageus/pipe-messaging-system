@@ -1,5 +1,6 @@
 #include "logging.h"
 #include "structures.h"
+#include "messages.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,26 +12,6 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <signal.h>
-
-
-/*
- * - the subscriber connects to the mbroker, citing the box name it wants to subscribe to
- *
- * - the mbroker checks if the box exists
- * 
- * - the subscriber scrapes the existing messages from the box and prints them to stdout
- * 
- * - the subscriber then waits for new messages to be published to the box
- * 
- * - prints new messages received to the box to the stdout
- * 
- * - to finish the session, the subscriber must receive a SIGINT (Ctrl+C), then closing the session and printing the number of messages received
- * 
- * - the named pipe is chosen by the subscriber
- * 
- * - the named pipe must be removed when the subscriber exits
- *
-*/
 
 int messages_received = 0;  // number of messages received by the subscriber
 volatile sig_atomic_t stop = 0;
@@ -57,16 +38,12 @@ int read_pipe_input(int pipe_fd) {
         ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
         if (num_bytes == 0) {
             // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
             return 0;
         } else if (num_bytes == -1) {
             // num_bytes == -1 indicates error
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
-
-        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
-        fprintf(stdout, "[INFO]: code: %d\n", code);
 
         if (code == 10) {
             // parse the message
@@ -82,7 +59,7 @@ int read_pipe_input(int pipe_fd) {
                 exit(EXIT_FAILURE);
             }
 
-            fprintf(stdout, "[INFO]: message: %s\n", message);
+            subscriber_message(message);
             messages_received++;
         } else {
             fprintf(stderr, "[ERR]: unknown code: %d\n", code);
@@ -113,10 +90,8 @@ int sign_in(char *register_pipe_name, char* pipe_name, char *box_name) {
         return -1;
     }
 
-    u_int8_t code = 2;
-    fprintf(stderr, "[INFO]: signing to box: %s\n", box_name);
+    u_int8_t code = OP_CODE_REGISTER_SUBSCRIBER;
     char* message = create_message(code, pipe_name, box_name);
-    fprintf(stderr, "[INFO]: sending message: %s with len %ld\n", message, strlen(message));
     if (write(pipe_fd, message, 289) < 0) { // error
         return -1;
     }
@@ -174,8 +149,6 @@ int main(int argc, char **argv) {
     if (unlink(pipe_name) < 0 && errno != ENOENT) {
         return -1;
     }
-
-    fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
 
 
     if (mkfifo(pipe_name, 0666) < 0) {
