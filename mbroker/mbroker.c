@@ -441,7 +441,7 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
-            METER PRINTS
+            
 
             // listen to the publisher on his pipe in a new thread
             if (listen_to_publisher(client_named_pipe_path, box_name) < 0) {
