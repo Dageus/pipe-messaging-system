@@ -12,23 +12,6 @@
 #include <errno.h>
 #include <sys/select.h>
 
-/*
- *
- * - when the manager is launched, it connects to the mbroker
- * 
- * - it receives the answer from the mbroker in the SAME PIPE that the manager used to connect to the mbroker
- * 
- * - it prints the answer to the stdout, and then exits
- * 
- * - to create a pipe use the function mkfifo(<path>, <mode>)
- * 
- * - to use the pipe use the function open(<path>, <flags>)
- * 
- * - to remove a pipe use the function unlink(<path>)
- */
-
-// manager creates named pipe for register
-
 int process_command(int pipe_fd, u_int8_t code) {
     // read the message from the pipe
     switch (code)
@@ -46,6 +29,9 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
+            error_box_response(error_message);
+        } else {
+            succesful_box_response();
         }
         break;
     }
@@ -59,10 +45,12 @@ int process_command(int pipe_fd, u_int8_t code) {
         if (return_code < 0) {     // box not removed
             char error_message[1024];
             num_bytes = read(pipe_fd, &error_message, sizeof(error_message));
-            if (num_bytes < 0) {    // error
+            if (num_bytes < 0) {    
                 return -1;
             }
-            // maybe print the message (not sure)
+            error_box_response(error_message);
+        } else {
+            succesful_box_response();
         }
         break;
     }
@@ -104,7 +92,9 @@ int process_command(int pipe_fd, u_int8_t code) {
             }
             if (strcmp(box_name, "") != 0 && last == 1) { // this means there are no boxes
                 no_boxes_found();
+                break;
             }
+            list_boxes_message(box_name, box_size, n_publishers, n_subscribers);
         }
         break;
     }                         
@@ -118,29 +108,24 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
     int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
     if (sel < 0) {
         return -1;
-    } else {
-        // data is available on the named pipe
-        // read the data from the pipe
-        u_int8_t code;
-        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
-        if (num_bytes == 0) {
-            // num_bytes == 0 indicates EOF
-            return 0;
-        } else if (num_bytes == -1) {
-            // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
-
-        fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
-        fprintf(stdout, "[INFO]: code: %d\n", code);
-
-        if (process_command(pipe_fd, code) < 0) {
-            return -1;
-        }
-        return 1;
     }
-    return 0;
+    // data is available on the named pipe
+    // read the data from the pipe
+    u_int8_t code;
+    ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+    if (num_bytes == 0) {
+        // num_bytes == 0 indicates EOF
+        return 0;
+    } else if (num_bytes == -1) {
+        // num_bytes == -1 indicates error
+        fprintf(stderr, "failed: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if (process_command(pipe_fd, code) < 0) {
+        return -1;
+    }
+    return 1;
 }
 
 char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsigned int size_of_message) {
@@ -153,11 +138,6 @@ char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsi
     return message;
 }
 
-
-
-/*
- * returns 0 on success, -1 on failure
- */
 int list_boxes_request(char* register_pipe_name, char* named_pipe) {
     // list boxes in mbroker
     
@@ -169,7 +149,8 @@ int list_boxes_request(char* register_pipe_name, char* named_pipe) {
     }
     
     // send the create command and the box name to the mbroker through the pipe
-    char *message = create_message(7, named_pipe, NULL, BOX_LIST_MESSAGE_SIZE);
+    u_int8_t code = OP_CODE_BOX_LIST;
+    char *message = create_message(code, named_pipe, NULL, BOX_LIST_MESSAGE_SIZE);
 
     // send this to the mbroker through the named pipe
     if (write(pipe_fd, message, sizeof(message)) < 0) {
@@ -187,11 +168,7 @@ int list_boxes_request(char* register_pipe_name, char* named_pipe) {
     return 0;
 }
 
-/*
- * returns 0 on success, -1 on failure
-*/
-int create_box_request(char* register_pipe_name, char *named_pipe, char *box_name) {
-    // use memcpy to copy the CLIENT_PIPE_PATH + client_pipe_num to the client_pipe_name
+int register_box_request(char* register_pipe_name, char *named_pipe, char *box_name) {
 
     // open the pipe
     int pipe_fd = open(register_pipe_name, O_WRONLY);
@@ -200,9 +177,8 @@ int create_box_request(char* register_pipe_name, char *named_pipe, char *box_nam
         return -1;
     }
     
-    // send the create command and the box name to the mbroker through the pipe
-    fprintf(stderr, "[INFO]: sending request to create box: %s\n", box_name);
-    u_int8_t code = 3;
+    // send the register command and the box name to the mbroker through the pipe
+    u_int8_t code = OP_CODE_REGISTER_BOX;
     char *message = create_message(code, named_pipe, box_name, BOX_MESSAGE_SIZE);
 
     // send this to the mbroker through the named pipe
@@ -210,8 +186,6 @@ int create_box_request(char* register_pipe_name, char *named_pipe, char *box_nam
         fprintf(stderr, "failed: could not write to pipe: %s\n", register_pipe_name);
         return -1;
     }
-
-    fprintf(stderr, "[INFO]: sent request: %s\n[INFO]: closing...\n", message);
 
     // close the pipe
     if (close(pipe_fd) == -1) {
@@ -284,7 +258,7 @@ int check_args(char* register_pipe_name, char* named_pipe) {
 int main(int argc, char **argv) {
     if (argc < 4) {
         fprintf(stderr, "failed: not enough arguments\n");
-        return -1;
+        exit(EXIT_FAILURE);
     }    
 
     char *register_pipe_name = argv[1]; // assign the register pipe name
@@ -292,33 +266,29 @@ int main(int argc, char **argv) {
     char *command = argv[3];            // assign the command
 
     if (check_args(register_pipe_name, pipe_name) == -1) {
+        fprintf(stderr, "failed: invalid arguments\n");
         return -1;
     }
 
-    fprintf(stderr, "[INFO]: starting manager...\n");
-
-    fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
     // unlink pipe_name if it already exists
     if (unlink(pipe_name) < 0 && errno != ENOENT) {
         fprintf(stderr, "failed: could not unlink pipe: %s\n", pipe_name);
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     if (mkfifo(pipe_name, 0666) < 0) {
         fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
-        return -1;
+        exit(EXIT_FAILURE);
     } else {
-        fprintf(stderr, "[INFO]: named pipe created\n");
     }
 
     if (argc > 4){                      // this means we're either creating or removing a box
         char *box_name = argv[4];
         if (strlen(box_name) > MAX_BOX_NAME_SIZE) {
-            fprintf(stderr, "failed: box name is too long\n");
-            return -1;
+            exit(EXIT_FAILURE);
         }
         if (strcmp(command, "create") == 0) {
-            create_box_request(register_pipe_name, pipe_name, box_name);
+            register_box_request(register_pipe_name, pipe_name, box_name);
         } else if (strcmp(command, "remove") == 0) {
             remove_box(register_pipe_name, pipe_name, box_name);
         }
@@ -329,9 +299,8 @@ int main(int argc, char **argv) {
     int pipe_fd = open(pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
         fprintf(stderr, "failed: could not open pipe: %s\n", pipe_name);
-        return -1;
+        exit(EXIT_FAILURE);
     }
-    fprintf(stderr, "opened pipe: %s\n", pipe_name);
 
     fd_set read_fds;
     FD_ZERO(&read_fds);
@@ -340,26 +309,24 @@ int main(int argc, char **argv) {
     while (true){
         int select_result = read_pipe_input(pipe_fd, read_fds);
         if (select_result == -1) {
-            fprintf(stderr, "failed: could not check for pipe input\n");
-            return -1;
+            fprintf(stderr, "failed: could not read from pipe: %s\n", pipe_name);
+            exit(EXIT_FAILURE);
         } else if (select_result == 1) {                // was successful
-            fprintf(stdout, "request was succesful\n");
             break;
         }
-        fprintf(stdout, "waiting for input...\n");
         // continue waiting for input
     }
 
     // close the pipe and exit
     if (close(pipe_fd) == -1) {
         fprintf(stderr, "failed: could not close pipe: %s\n", pipe_name);
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     // remove the named pipe
     if (unlink(pipe_name) < 0) {
         fprintf(stderr, "failed: could not remove pipe: %s\n", pipe_name);
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     return 0;
