@@ -32,22 +32,17 @@
 /*
  * returns 0 on success, -1 on failure
 */
-int send_message(int pipe_fd, char const *str) {
-    size_t len = strlen(str);
-    size_t written = 0;
+int send_message(int pipe_fd, char const *message_written) {
+    // IMPORTANT: move this code to another function
+    u_int8_t code = 9;
+    char* message = malloc(sizeof(char) * 1025);
+    memcpy(message, &code, sizeof(u_int8_t));
+    memcpy(message + sizeof(u_int8_t), message_written, strlen(message_written));
+    memset(message + sizeof(u_int8_t) + strlen(message_written), '\0', 1024 - strlen(message_written));
 
-    while (written < len) {
-        size_t to_write =  len - written;
-        ssize_t ret = write(pipe_fd, str + written, to_write);
-        if (ret < 0) {
-            fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-            return -1;
-        }
-
-        written += (size_t) ret;
+    if (write(pipe_fd, message, 1025) < 0) { // error
+        return -1;
     }
-
-    // check if the message includes a '\n' 
 
     return 0;
 }
@@ -140,6 +135,8 @@ int main(int argc, char **argv) {
             // fill the rest of the message with '\0'
             memset(message + strlen(message), '\0', MAX_MESSAGE_SIZE - strlen(message));
         }
+
+        fprintf(stderr, "[INFO]: sending message: %s\n", message);
 
         if (send_message(pipe_fd, message) < 0) {
             fprintf(stderr, "failed: could not send message\n");

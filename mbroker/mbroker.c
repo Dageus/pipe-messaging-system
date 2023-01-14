@@ -361,7 +361,6 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
     } else {
         // data is available on the named pipe
         // read the data from the pipe
-        fprintf(stderr, "data is available on the named pipe\n");
         u_int8_t code;
         ssize_t num_bytes;
         num_bytes = read(pipe_fd, &code, sizeof(code));
@@ -377,6 +376,7 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
         fprintf(stderr, "code: %d\n", code);
 
         if (code == 9){
+            fprintf(stderr, "[INFO]: received message from publisher\n");
             char message[1024];
             num_bytes = read(pipe_fd, message, sizeof(message));
             if (num_bytes < 0) { // error
