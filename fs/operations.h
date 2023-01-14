@@ -125,6 +125,16 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len);
 int tfs_unlink(char const *target);
 
 /**
+ * Sets the file offset of the fhandle to the beginning of the file.
+ * 
+ * Input:
+ *  - fhandle: file handle (obtained from a previous call to tfs_open)
+ * 
+ * Returns 0 if successful, -1 otherwise
+*/
+int tfs_rewind_offset(int fhandle);
+
+/**
  * Copy the contents of a file that exists in the OS' file system tree
  * (outside TécnicoFS) to the TécnicoFS.
  *

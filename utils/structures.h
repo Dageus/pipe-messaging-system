@@ -44,11 +44,17 @@ typedef struct subscriber_list_t{
     struct subscriber_list_t* next;
 } subscriber_list_t;
 
+typedef struct message_list_t{
+    size_t message_size;
+    struct message_list_t* next;
+} message_list_t;
+
 typedef struct {
     char* box_name;
     subscriber_list_t* subscribers;
     char *publisher_named_pipe;
     u_int64_t num_subscribers;
+    message_list_t* messages_size;
 } box_t;
 
 typedef struct box_list_t{
@@ -64,6 +70,7 @@ box_list_t* new_node(char* box_name){
     box_node->box->publisher_named_pipe = NULL;
     box_node->box->subscribers = NULL;
     box_node->box->num_subscribers = 0;
+    box_node->box->messages_size = NULL;
     box_node->next = NULL;
     return box_node;
 }

@@ -93,7 +93,7 @@ char* create_message(u_int8_t code, char* message_to_write){
     memcpy(message, &code, sizeof(u_int8_t));
     memcpy(message + 1, message_to_write, strlen(message_to_write));
     memset(message + 1 + strlen(message_to_write), '\0', 1024 - strlen(message_to_write));
-    pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
+    //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
     return message;
 }
 
@@ -150,7 +150,7 @@ box_t* find_box_by_name(char* box_name) {
     return NULL;
 }
 
-int get_old_messages(char* box_name, char* subscriber_pipe_name) {
+int get_old_messages(box_t* box, char* subscriber_pipe_name) {
     // lock the mutex
     //if (pthread_mutex_lock(&g_library_mutex) == -1) {
     //    WARN("failed to lock mutex: %s", strerror(errno));
@@ -158,16 +158,34 @@ int get_old_messages(char* box_name, char* subscriber_pipe_name) {
     //} 
 
     // open the box using the box name and tfs
-    int box_fd = tfs_open(box_name, TFS_O_APPEND);
+    int box_fd = tfs_open(box->box_name, TFS_O_APPEND);
+
+    if (box_fd < 0) {
+        fprintf(stderr, "[ERROR]: Could not open box %s with error %s\n", box->box_name, strerror(errno));
+        //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
+        return -1;
+    }
+
+    if (tfs_rewind_offset(box_fd) < 0) {
+        fprintf(stderr, "[ERROR]: Could not rewind offset for box %s with error %s\n", box->box_name, strerror(errno));
+        //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
+        return -1;
+    }
     
     // read the messages from the box
-    char* message = (char*) malloc(sizeof(char) * 1024);
-    ssize_t num_bytes = tfs_read(box_fd, message, (size_t) 1024);
+    message_list_t* messages = box->messages_size;
+    fprintf(stderr, "[INFO]: FIRST ELEMENT OF LINKED LIST IS: %ld\n", messages->message_size);
+    char* message = (char*) malloc(sizeof(char) * messages->message_size);
+    fprintf(stderr, "[INFO]: Message size is %ld\n", messages->message_size);
+    ssize_t num_bytes = tfs_read(box_fd, message, messages->message_size);
+
     if (num_bytes < 0) {
         //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
         return -1;
     }
-    while (num_bytes == 1024) {
+    while (true) {
+        fprintf(stderr, "[INFO]: Number of bytes read is %ld\n", num_bytes);
+        fprintf(stderr, "[INFO]: Message is %s\n", message);
         // send the message to the subscriber
         int pipe_fd = open(subscriber_pipe_name, O_WRONLY);
         if (pipe_fd < 0) {
@@ -184,14 +202,14 @@ int get_old_messages(char* box_name, char* subscriber_pipe_name) {
             return -1;
         }
         fprintf(stderr, "[INFO]: Message sent to %s\n", subscriber_pipe_name);
-        num_bytes = tfs_read(box_fd, message, 1024);
-        if (num_bytes < 0) {
-            //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
-            return -1;
+        if (messages->next == NULL) {
+            break;
         }
+        messages = messages->next;
+        fprintf(stderr, "[INFO]: Message size is %ld\n", messages->message_size);
+        num_bytes = tfs_read(box_fd, message, messages->message_size);
     }
 
-    // send the old messages to the subscriber
     //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
 
     return 0;
@@ -328,7 +346,9 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         new_subscriber_node->next = box->subscribers;
     }
 
-    if (get_old_messages(box_name, client_named_pipe_path) < 0) {
+    fprintf(stderr, "[INFO]: Subscriber with pipe path %s added to box %s\n", client_named_pipe_path, box_name);
+
+    if (get_old_messages(box, client_named_pipe_path) < 0) {
         return -1;
     }
 
@@ -414,6 +434,8 @@ int list_boxes_command(char* manager_pipe_name){
 int write_to_box(char* box_name, char* message, size_t message_size){
     int box_fd = tfs_open(box_name, TFS_O_APPEND);
 
+    fprintf(stderr, "[[[INFO]]]: write to box has been called\n");
+
     if (box_fd < 0) {
         return -1;
     }
@@ -424,9 +446,36 @@ int write_to_box(char* box_name, char* message, size_t message_size){
         return -1;
     }
 
+    fprintf(stderr, "[INFO]: wrote %ld bytes to box\n", num_bytes);
+
     // close the box
     if (tfs_close(box_fd) < 0) {
         return -1;
+    }
+
+    box_t *box = find_box_by_name(box_name);
+    if (box == NULL) {
+        return -1;
+    }
+    
+    if (box->messages_size == NULL) {
+        box->messages_size = malloc(sizeof(message_list_t));
+        box->messages_size->message_size = message_size;
+        box->messages_size->next = NULL;
+        fprintf(stderr, "[INFO]: first message_size added to box: %ld\n", box->messages_size->message_size);
+    } else {
+        // get last message_size
+        message_list_t* message_size_node = box->messages_size;
+        while (message_size_node->next != NULL) {
+            message_size_node = message_size_node->next;
+        }
+
+        // add new message_size
+        message_list_t* new_message_node = malloc(sizeof(message_list_t));
+        new_message_node->message_size = message_size;
+        new_message_node->next = NULL;
+
+        message_size_node->next = new_message_node;
     }
 
     fprintf(stderr, "[INFO]: wrote to box successfully\n");
@@ -434,9 +483,14 @@ int write_to_box(char* box_name, char* message, size_t message_size){
     return 0;
 }
 
+/*
 int read_from_box(char* box_name, char* message, size_t message_size){
     int box_fd = tfs_open(box_name, TFS_O_APPEND);
     if (box_fd < 0) {
+        return -1;
+    }
+
+    if (tfs_rewind_offset(box_fd) < 0) {
         return -1;
     }
     
@@ -452,7 +506,7 @@ int read_from_box(char* box_name, char* message, size_t message_size){
     }
     
     return 0;
-}
+}*/
 
 int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box_name) {
 
@@ -499,12 +553,10 @@ int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box
         }
 
         // write to the box
-        if (write_to_box(box_name, message, sizeof(message)) < 0) {
+        if (write_to_box(box_name, message, strlen(message)) < 0) {
             pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
             return -1;
         }
-
-        fprintf(stderr, "[INFO]: bro?\n");
 
         // send the message to all the subscribers of the box
         if (spread_message(message, publisher_named_pipe) < 0) {
@@ -512,6 +564,7 @@ int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box
             return -1;
         }
     }
+
     pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
     return 0;
 }
@@ -538,10 +591,10 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
             //pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
             return -1;
         } else if (ret == 1){
-            //pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
             break;
         }
     }
+    //pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
     fprintf(stderr, "[INFO]: EXITING PUBLISHER LISTEN\n");
     return 0;
 }
@@ -584,6 +637,8 @@ int register_publisher(int pipe_fd){
         }
     }
 
+    fprintf(stderr, "[INFO]: EXITING REGISTER PUBLISHER\n");
+
     return 0;
 }
 
@@ -607,6 +662,8 @@ int register_subscriber(int pipe_fd){
     if (num_bytes < 0) { // error
         return -1;
     }
+
+    fprintf(stderr, "[INFO]: client_named_pipe_path: %s\n", client_named_pipe_path);
 
     // register the subscriber
     if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
@@ -764,7 +821,7 @@ int read_pipe_input(int pipe_fd){
             if (register_publisher(pipe_fd) < 0){
                 return -1;
             }
-            
+
             break;
         }
         // register a subscriber

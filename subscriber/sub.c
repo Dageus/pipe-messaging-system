@@ -37,6 +37,7 @@ volatile sig_atomic_t stop = 0;
 
 void sigint_handler(int signum) {
     (void)signum;
+    fprintf(stderr, "[INFO]: received SIGINT\n");
     stop = 1;
 }
 

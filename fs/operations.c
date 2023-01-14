@@ -239,6 +239,9 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         WARN("failed to unlock mutex: %s", strerror(errno));
         return -1;
     }
+    
+    // file->of_offset += 1024;
+    
     return (ssize_t)to_write;
 }
 
@@ -281,6 +284,34 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         return -1;
     }
     return (ssize_t)to_read;
+}
+
+int tfs_rewind_offset(int fhandle) {
+    if (pthread_mutex_lock(&g_library_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    }
+    open_file_entry_t *file = get_open_file_entry(fhandle);
+    if (file == NULL) {
+        if (pthread_mutex_unlock(&g_library_mutex) == -1) {
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
+        return -1;
+    }
+
+    // From the open file table entry, we get the inode
+    inode_t const *inode = inode_get(file->of_inumber);
+    ALWAYS_ASSERT(inode != NULL, "tfs_rewind: inode of open file deleted");
+
+    // The offset associated with the file handle is set to 0
+    file->of_offset = 0;
+
+    if (pthread_mutex_unlock(&g_library_mutex) == -1) {
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
 }
 
 int tfs_unlink(char const *target) {
