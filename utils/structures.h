@@ -62,7 +62,7 @@ box_list_t* new_node(char* box_name){
 // Structure to hold the state of the mbroker server
 typedef struct {
     char* register_pipe_name;            // Path to the server's named pipe
-    int max_sessions;                    // Maximum number of concurrent sessions
+    size_t max_sessions;                    // Maximum number of concurrent sessions
 } mbroker_t;
 
 // COMMANDS:

@@ -27,6 +27,10 @@ mbroker_t *mbroker;
 
 box_list_t *box_list = NULL;
 
+pc_queue_t *pc_queue = NULL;
+
+pthread_t *thread_array = NULL;
+
 // array to keep track of the sessions
 
 // array to keep track of the pipes
@@ -684,23 +688,30 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    if (tfs_init(NULL) < 0) {
-        fprintf(stderr, "failed: could not initialize tfs\n");
-        return -1;
-    }
-
-    if (pcq_create() < 0) {
-        fprintf(stderr, "failed: could not initialize pcq\n");
-        return -1;
-    }
-
     fprintf(stderr, "[INFO]: starting mbroker\n");
 
     mbroker = (mbroker_t*) malloc(sizeof(mbroker_t));
 
     mbroker->register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
-    mbroker->max_sessions = atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
+    mbroker->max_sessions = (size_t) atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
     
+    // initialize the tfs
+    if (tfs_init(NULL) < 0) {
+        fprintf(stderr, "failed: could not initialize tfs\n");
+        return -1;
+    }
+
+
+    // initialize the pcq
+    pc_queue = malloc(sizeof(pc_queue_t));
+
+    if (pcq_create(pc_queue, mbroker->max_sessions) < 0) {
+        fprintf(stderr, "failed: could not initialize pcq\n");
+        return -1;
+    }
+
+    // initialize the session threads
+    thread_array = malloc(sizeof(pthread_t) * mbroker->max_sessions);   // array of threads
 
     // unlink register_pipe_name if it already exists
     if (unlink(mbroker->register_pipe_name) < 0 && errno != ENOENT) {
@@ -746,7 +757,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    if (pcq_destroy() < 0){
+    if (pcq_destroy(pc_queue) < 0){
         fprintf(stderr, "failed: could not destroy pcq\n");
         return -1;  
     }
