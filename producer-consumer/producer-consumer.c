@@ -72,10 +72,14 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
     pthread_mutex_unlock(&queue->pcq_tail_lock);
+
+    // broadcast/signal to the popper that he can pop
+    pthread_mutex_lock(&queue->pcq_pusher_condvar_lock);
+    pthread_cond_signal(&queue->pcq_pusher_condvar);
+    pthread_mutex_unlock(&queue->pcq_pusher_condvar_lock);
+
     queue->pcq_current_size++;
     return 0;
-
-
 }
 
 void *pcq_dequeue(pc_queue_t *queue) {
@@ -92,6 +96,12 @@ void *pcq_dequeue(pc_queue_t *queue) {
     void* elem = queue->pcq_buffer[queue->pcq_head];
     queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity; // what is this doing here
     pthread_mutex_unlock(&queue->pcq_head_lock);
+
+    // broadcast/signal to the pusher that he can push
+    pthread_mutex_lock(&queue->pcq_popper_condvar_lock);
+    pthread_cond_signal(&queue->pcq_popper_condvar);
+    pthread_mutex_unlock(&queue->pcq_popper_condvar_lock);
+
     queue->pcq_current_size--;
     return elem;
     // IMPORTANT
