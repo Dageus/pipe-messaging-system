@@ -52,6 +52,15 @@ int send_message(int pipe_fd, char const *str) {
     return 0;
 }
 
+char* create_message(u_int8_t code, char const *pipe_name, char const *box_name) {
+    char* message = malloc(sizeof(char) * 289);
+    memcpy(message, &code, sizeof(u_int8_t));
+    memcpy(message + sizeof(u_int8_t), pipe_name, strlen(pipe_name));
+    memset(message + sizeof(u_int8_t) + strlen(pipe_name), '\0', 256 - strlen(pipe_name));
+    memcpy(message + 257, box_name, strlen(box_name));
+    return message;
+}
+
 /*
  * returns 0 on success, -1 on failure
 */
@@ -61,13 +70,15 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
         return -1;
     }
 
-    char message[256];
-    sprintf(message, "pub %s %s", pipe_name, box_name);
+    u_int8_t code = 1;
+    char* message = create_message(code, pipe_name, box_name);
     if (write(pipe_fd, message, strlen(message)) < 0) { // error
         return -1;
     }
 
-    close(pipe_fd);
+    if (close(pipe_fd) < 0) { // error
+        return -1;
+    }
 
     return 0;
 }
@@ -86,7 +97,14 @@ int main(int argc, char **argv) {
     char *pipe_name = argv[2];          // pipe_name is the name of the pipe to which the publisher wants to write to
     char *box_name = argv[3];           // box_name is the name of the box to which the publisher wants to publish to
 
-    if (mkfifo(pipe_name, 0666) == -1) {
+    // unlink register_pipe_name if it already exists
+    if (unlink(pipe_name) < 0) {
+        return -1;
+    }
+
+    fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
+
+    if (mkfifo(pipe_name, 0666) < 0) {
         fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
         return -1;
     }
@@ -98,7 +116,6 @@ int main(int argc, char **argv) {
 
     int pipe_fd = open(register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
-        perror("open");
         return -1;
     }
 

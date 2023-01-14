@@ -311,7 +311,50 @@ int pub_to_box(char *box_name) {
     return 0;
 }
 
-int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_named_pipe){
+int write_to_box(char* box_name, char* message, size_t message_size){
+    int box_fd = tfs_open(box_name, TFS_O_APPEND);
+
+    if (box_fd < 0) {
+        return -1;
+    }
+
+    // write the message to the box
+    ssize_t num_bytes = tfs_write(box_fd, message, message_size);
+    if (num_bytes < 0) {
+        return -1;
+    }
+
+    // close the box
+    if (tfs_close(box_fd) < 0) {
+        return -1;
+    }
+    
+    return 0;
+}
+
+int read_from_box(char* box_name, char* message, size_t message_size){
+    int box_fd = tfs_open(box_name, TFS_O_APPEND);
+    if (box_fd < 0) {
+        return -1;
+    }
+    
+    //read the message from the box
+    ssize_t num_bytes = tfs_read(box_fd, message, message_size);
+    if (num_bytes < 0) {
+        return -1;
+    }
+
+    // close the box
+    if (tfs_close(box_fd) < 0) {
+        return -1;
+    }
+    
+    return 0;
+}
+
+
+
+int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_named_pipe, char* box_name) {
     int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
     if (sel < 0) {
         return -1;
@@ -336,19 +379,25 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
             if (num_bytes < 0) { // error
                 return -1;
             }
+
+            // write to the box
+            if (write_to_box(box_name, message, sizeof(message)) < 0) {
+                return -1;
+            }
+
             // send the message to all the subscribers of the box
             if (spread_message(message, publisher_named_pipe) < 0) {
                 return -1;
             }
         }
-
     }
-
     return 0;
 }
 
-int listen_to_publisher(char* publisher_named_pipe){
-    // listen to the publisher, the same way as manager.c and sub.c
+int listen_to_publisher(char* publisher_named_pipe, char* box_name){
+    // find the publisher in the box list
+    
+    // listen to the publisher
     int pipe_fd = open(publisher_named_pipe, O_RDONLY);
     if (pipe_fd < 0) {
         return -1;
@@ -360,12 +409,13 @@ int listen_to_publisher(char* publisher_named_pipe){
     while(true){
         // read the message from the pipe
         // send the message to the subscribers
-        if (read_publisher_pipe_input(pipe_fd, read_fds, publisher_named_pipe) < 0) {
+        if (read_publisher_pipe_input(pipe_fd, read_fds, publisher_named_pipe, box_name) < 0) {
             return -1;
-        } else{
-            // send the message to the subscribers
+        } else {
+            break;
         }
     }
+    return 0;
 }
 
 int process_command(int pipe_fd, u_int8_t code) {
@@ -391,8 +441,10 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
+            METER PRINTS
+
             // listen to the publisher on his pipe in a new thread
-            if (listen_to_publisher(client_named_pipe_path) < 0) {
+            if (listen_to_publisher(client_named_pipe_path, box_name) < 0) {
                 return -1;
             }
 

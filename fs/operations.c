@@ -202,10 +202,10 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     // Determine how many bytes to write
-    size_t block_size = state_block_size();
-    if (to_write + file->of_offset > block_size) {
-        to_write = block_size - file->of_offset;
-    }
+    //size_t block_size = state_block_size();
+    //if (to_write + file->of_offset > block_size) {
+    //    to_write = block_size - file->of_offset;
+    //}
 
     if (to_write > 0) {
         if (inode->i_size == 0) {
