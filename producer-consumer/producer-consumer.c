@@ -23,29 +23,76 @@
 
 // functions from producer-consumer.h
 int pcq_create(pc_queue_t *queue, size_t capacity) {
-    (void)queue; // suppress unused parameter warning
-    (void)capacity; // suppress unused parameter warning
+    pc_queue_t* queue = (pc_queue_t*) malloc(sizeof(pc_queue_t));
+    queue->pcq_capacity = capacity;
+    queue->pcq_current_size = 0;
+    queue->pcq_head = 0;
+    queue->pcq_tail = 0;
+    queue->pcq_buffer = (void**) malloc(sizeof(void*) * capacity);
+    queue->pcq_current_size_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    queue->pcq_head_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    queue->pcq_tail_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    queue->pcq_pusher_condvar_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    queue->pcq_popper_condvar_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    queue->pcq_pusher_condvar = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
+    queue->pcq_popper_condvar = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
     return 0;
 
 }
 
 int pcq_destroy(pc_queue_t *queue) {
-    (void)queue; // suppress unused parameter warning
+    // release the internal resources of the queue
+    free(queue->pcq_buffer);
+    queue->pcq_buffer = NULL;
+    queue->pcq_capacity = 0;
+    queue->pcq_current_size = 0;
+    queue->pcq_head = 0;
+    queue->pcq_tail = 0;
+    pthread_mutex_destroy(&queue->pcq_current_size_lock);
+    pthread_mutex_destroy(&queue->pcq_head_lock);
+    pthread_mutex_destroy(&queue->pcq_tail_lock);
+    pthread_mutex_destroy(&queue->pcq_pusher_condvar_lock);
+    pthread_mutex_destroy(&queue->pcq_popper_condvar_lock);
+    pthread_cond_destroy(&queue->pcq_pusher_condvar);
+    pthread_cond_destroy(&queue->pcq_popper_condvar);
     return 0;
 
 }
 
 int pcq_enqueue(pc_queue_t *queue, void *elem) {
-    (void)queue; // suppress unused parameter warning
-    (void)elem; // suppress unused parameter warning
+    // insert a new element at the front of the queue
+    // If the queue is full, sleep until the queue has space
+    pthread_mutex_lock(&queue->pcq_pusher_condvar_lock);
+    while (queue->pcq_current_size == queue->pcq_capacity) {
+        pthread_cond_wait(&queue->pcq_pusher_condvar, &queue->pcq_pusher_condvar_lock);
+    }
+    pthread_mutex_unlock(&queue->pcq_pusher_condvar_lock);
+    // insert the element
+    pthread_mutex_lock(&queue->pcq_tail_lock);
+    queue->pcq_buffer[queue->pcq_tail] = elem;
+    queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
+    pthread_mutex_unlock(&queue->pcq_tail_lock);
+    queue->pcq_current_size++;
     return 0;
 
 
 }
 
 void *pcq_dequeue(pc_queue_t *queue) {
-    (void)queue; // suppress unused parameter warning
-    return NULL;
+    // remove and return the element at the back of the queue
+    // If the queue is empty, sleep until the queue has an element
+    pthread_mutex_lock(&queue->pcq_popper_condvar_lock);
+    while (queue->pcq_current_size == 0) {
+        pthread_cond_wait(&queue->pcq_popper_condvar, &queue->pcq_popper_condvar_lock);
+    }
+    pthread_mutex_unlock(&queue->pcq_popper_condvar_lock);
 
-
+    // remove the element
+    pthread_mutex_lock(&queue->pcq_head_lock);
+    void* elem = queue->pcq_buffer[queue->pcq_head];
+    queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity; // what is this doing here
+    pthread_mutex_unlock(&queue->pcq_head_lock);
+    queue->pcq_current_size--;
+    return elem;
+    // IMPORTANT
 }
