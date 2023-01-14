@@ -81,6 +81,29 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
     return 0;
 }
 
+int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
+    if (register_pipe_name == NULL || pipe_name == NULL || box_name == NULL) {
+        fprintf(stderr, "failed: one or more of the arguments is NULL\n");
+        return -1;
+    }
+    if (strlen(register_pipe_name) > MAX_NAMED_PIPE_SIZE) {
+        fprintf(stderr, "failed: register_pipe_name is too long\n");
+        return -1;
+    }
+
+    if (strlen(pipe_name) > MAX_NAMED_PIPE_SIZE) {
+        fprintf(stderr, "failed: pipe_name is too long\n");
+        return -1;
+    }
+
+    if (strlen(box_name) > MAX_BOX_NAME_SIZE) {
+        fprintf(stderr, "failed: box_name is too long\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 /*
  * format:
  *  - pub <register_pipe_name> <pipe_name> <box_name>
@@ -94,6 +117,10 @@ int main(int argc, char **argv) {
     char *register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the publisher wants to connect to
     char *pipe_name = argv[2];          // pipe_name is the name of the pipe to which the publisher wants to write to
     char *box_name = argv[3];           // box_name is the name of the box to which the publisher wants to publish to
+
+    if (check_args(register_pipe_name, pipe_name, box_name) < 0) {
+        return -1;
+    }
 
     // unlink register_pipe_name if it already exists
     if (unlink(pipe_name) < 0 && errno != ENOENT) {
@@ -116,10 +143,6 @@ int main(int argc, char **argv) {
     if (pipe_fd < 0) {
         return -1;
     }
-
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(pipe_fd, &read_fds);
 
     fprintf(stderr, "[INFO]: waiting for input from stdin\n");
     while (true) {

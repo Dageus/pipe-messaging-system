@@ -865,18 +865,17 @@ int read_pipe_input(int pipe_fd){
     return 0;
 }
 
-/*
 void *session_thread() {
-    void (thread_func) (void *);
     while (true) {
         session_t* data = (session_t *)pcq_dequeue(pc_queue);
-        thread_func = data->func;
-        thread_func(data->arg);
+        if (data == NULL) {
+            fprintf(stderr, "failed: could not dequeue from pcq\n");
+            exit(EXIT_FAILURE);
+        }
 
-        free(data->arg);
     }
     return NULL;
-}*/
+}
 
 int init_mbroker(mbroker_t *mbroker_config) {
     // initialize the tfs
@@ -896,7 +895,10 @@ int init_mbroker(mbroker_t *mbroker_config) {
     // initialize the session threads
     thread_array = malloc(sizeof(pthread_t) * mbroker_config->max_sessions);   // array of threads
     for (int i = 0; i < mbroker_config->max_sessions; i++) {
-        //thread_array[i] = pthread_create(&thread_array[i], NULL, session_thread, NULL);
+        if (pthread_create(&thread_array[i], NULL, session_thread, NULL) < 0) {
+            fprintf(stderr, "failed: could not create thread\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     // unlink register_pipe_name if it already exists
@@ -936,6 +938,14 @@ int close_mbroker(){
     return 0;
 }
 
+int check_args(char* register_pipe_name, size_t max_sessions){
+    if (register_pipe_name == NULL || max_sessions == 0 || strlen(register_pipe_name) > MAX_NAMED_PIPE_SIZE) {
+        fprintf(stderr, "failed: invalid arguments\n");
+        return -1;
+    }
+    return 0;
+}
+
 /*
  * format:
  *  - mbroker <register_pipe_name> <max_sessions>
@@ -952,6 +962,10 @@ int main(int argc, char **argv) {
 
     mbroker->register_pipe_name = argv[1];              // register_pipe_name is the name of the pipe to which the manager wants to connect to
     mbroker->max_sessions = (size_t) atoi(argv[2]);     // max_sessions is the maximum number of sessions that can be open at the same time
+    
+    if (check_args(mbroker->register_pipe_name, mbroker->max_sessions) < 0) {
+        return -1;
+    }
     
     // initialize the mbroker
     if (init_mbroker(mbroker) < 0) {

@@ -253,6 +253,22 @@ int remove_box(char* register_pipe_name, char *named_pipe, char *box_name) {
     return 0;
 }
 
+int check_args(char* register_pipe_name, char* named_pipe) {
+    if (register_pipe_name == NULL) {
+        fprintf(stderr, "failed: register pipe name is null\n");
+        return -1;
+    }
+    if (named_pipe == NULL) {
+        fprintf(stderr, "failed: named pipe is null\n");
+        return -1;
+    }
+    if (strlen(register_pipe_name) > MAX_NAMED_PIPE_SIZE || strlen(named_pipe) > MAX_NAMED_PIPE_SIZE) {
+        fprintf(stderr, "failed: one or more of the arguments is too long\n");
+        return -1;
+    }
+    return 0;
+}
+
 
 // register pipe name is the name of the pipe to which the manager wants to connect to
 
@@ -275,7 +291,11 @@ int main(int argc, char **argv) {
     char *pipe_name = argv[2];          // assign the pipe name
     char *command = argv[3];            // assign the command
 
-    fprintf(stderr, "[INFO]: starting manager\n");
+    if (check_args(register_pipe_name, pipe_name) == -1) {
+        return -1;
+    }
+
+    fprintf(stderr, "[INFO]: starting manager...\n");
 
     fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
     // unlink pipe_name if it already exists
@@ -293,6 +313,10 @@ int main(int argc, char **argv) {
 
     if (argc > 4){                      // this means we're either creating or removing a box
         char *box_name = argv[4];
+        if (strlen(box_name) > MAX_BOX_NAME_SIZE) {
+            fprintf(stderr, "failed: box name is too long\n");
+            return -1;
+        }
         if (strcmp(command, "create") == 0) {
             create_box_request(register_pipe_name, pipe_name, box_name);
         } else if (strcmp(command, "remove") == 0) {

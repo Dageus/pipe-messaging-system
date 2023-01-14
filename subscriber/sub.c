@@ -41,7 +41,12 @@ void sigint_handler(int signum) {
     stop = 1;
 }
 
-int read_pipe_input(int pipe_fd, fd_set read_fds) {
+int read_pipe_input(int pipe_fd) {
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
+
     int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
     if (sel < 0) {
         return -1;
@@ -123,6 +128,29 @@ int sign_in(char *register_pipe_name, char* pipe_name, char *box_name) {
     return 0;
 }
 
+int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
+    if (register_pipe_name == NULL || pipe_name == NULL || box_name == NULL) {
+        fprintf(stderr, "failed: one or more of the arguments is NULL\n");
+        return -1;
+    }
+    if (strlen(register_pipe_name) > MAX_NAMED_PIPE_SIZE) {
+        fprintf(stderr, "failed: register_pipe_name is too long\n");
+        return -1;
+    }
+
+    if (strlen(pipe_name) > MAX_NAMED_PIPE_SIZE) {
+        fprintf(stderr, "failed: pipe_name is too long\n");
+        return -1;
+    }
+
+    if (strlen(box_name) > MAX_BOX_NAME_SIZE) {
+        fprintf(stderr, "failed: box_name is too long\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 
 /*
  * format:
@@ -137,6 +165,10 @@ int main(int argc, char **argv) {
     char* register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the subscriber wants to connect to
     char* pipe_name = argv[2];          // pipe_name is the name of the pipe to which the subscriber wants to connect to
     char* box_name = argv[3];           // box_name is the name of the box to which the subscriber wants to subscribe to
+
+    if (check_args(register_pipe_name, pipe_name, box_name) < 0) {
+        return -1;
+    }
 
     // unlink register_pipe_name if it already exists
     if (unlink(pipe_name) < 0 && errno != ENOENT) {
@@ -161,15 +193,11 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(pipe_fd, &read_fds);
-
     signal(SIGINT, sigint_handler); // register the SIGINT handler
     
     while (!stop) {
         // wait for data to be available on the named pipe
-        if (read_pipe_input(pipe_fd, read_fds) < 0) {
+        if (read_pipe_input(pipe_fd) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }

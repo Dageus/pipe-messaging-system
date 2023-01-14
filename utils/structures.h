@@ -12,6 +12,8 @@
 #define BOX_LIST_MESSAGE_SIZE 264
 #define MAX_MESSAGE_SIZE 1024
 #define ANSWER_MESSAGE_SIZE 1029
+#define MAX_BOX_NAME_SIZE 32
+#define MAX_NAMED_PIPE_SIZE 256
 
 // op_codes
 #define OP_CODE_REGISTER_PUBLISHER  1
@@ -82,7 +84,8 @@ typedef struct {
 } mbroker_t;
 
 typedef struct {
-    void *func;
-    void *arg; 
+    u_int8_t op_code;
+    char* client_named_pipe;
+    char* box_name;
 } session_t;
 #endif
