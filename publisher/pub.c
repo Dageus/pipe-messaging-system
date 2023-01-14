@@ -53,6 +53,7 @@ char* create_message(u_int8_t code, char const *pipe_name, char const *box_name)
     memcpy(message + sizeof(u_int8_t), pipe_name, strlen(pipe_name));
     memset(message + sizeof(u_int8_t) + strlen(pipe_name), '\0', 256 - strlen(pipe_name));
     memcpy(message + 257, box_name, strlen(box_name));
+    memset(message + 257 + strlen(box_name), '\0', 32 - strlen(box_name));
     return message;
 }
 
@@ -72,7 +73,7 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
     if (write(pipe_fd, message, 289) < 0) { // error
         return -1;
     }
-
+    
     if (close(pipe_fd) < 0) { // error
         return -1;
     }
@@ -95,7 +96,7 @@ int main(int argc, char **argv) {
     char *box_name = argv[3];           // box_name is the name of the box to which the publisher wants to publish to
 
     // unlink register_pipe_name if it already exists
-    if (unlink(pipe_name) < 0) {
+    if (unlink(pipe_name) < 0 && errno != ENOENT) {
         return -1;
     }
 
@@ -125,6 +126,7 @@ int main(int argc, char **argv) {
         // wait for input from user in stdin
         char message[1024];
         if (fgets(message, sizeof(message), stdin) == NULL) {
+            fprintf(stdout, "[INFO]: received EOF, exiting as per request of the client\n");
             // received an EOF, exit
             break;
         }

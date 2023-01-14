@@ -40,35 +40,6 @@ void sigint_handler(int sig) {
     interrupted = 1;
 }
 
-int process_command(int pipe_fd, u_int8_t code) {
-    // read the message from the pipe
-    switch (code)
-    {
-    case 10:{                // subscriber receives a message
-        // parse the message
-        char message[1024];
-        ssize_t num_bytes = read(pipe_fd, message, sizeof(message));
-        if (num_bytes == 0) {
-            // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
-            return 0;
-        } else if (num_bytes == -1) {
-            // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
-
-        fprintf(stdin, "[INFO]: message: %s\n", message);
-        messages_received++;
-
-        break;
-    }
-    default:                // invalid command
-        return -1;
-    }
-    return 0;
-}
-
 int read_pipe_input(int pipe_fd, fd_set read_fds) {
     int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
     if (sel < 0) {
@@ -91,12 +62,38 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         fprintf(stderr, "[INFO]: received %zd B\n", num_bytes);
         fprintf(stdout, "[INFO]: code: %d\n", code);
 
-        if (process_command(pipe_fd, code) < 0) {
+        if (code == 10) {
+            // parse the message
+            char message[1024];
+            num_bytes = read(pipe_fd, message, sizeof(message));
+            if (num_bytes == 0) {
+                // num_bytes == 0 indicates EOF
+                fprintf(stderr, "[INFO]: pipe closed\n");
+                return 0;
+            } else if (num_bytes == -1) {
+                // num_bytes == -1 indicates error
+                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+
+            fprintf(stdout, "[INFO]: message: %s\n", message);
+            messages_received++;
+        } else {
+            fprintf(stderr, "[ERR]: unknown code: %d\n", code);
             return -1;
         }
-
     }
     return 0;
+}
+
+char* create_message(u_int8_t code, char* pipe_name, char const *box_name) {
+    char* message = malloc(sizeof(char) * 289);
+    memcpy(message, &code, sizeof(u_int8_t));
+    memcpy(message + sizeof(u_int8_t), pipe_name, strlen(pipe_name));
+    memset(message + sizeof(u_int8_t) + strlen(pipe_name), '\0', 256 - strlen(pipe_name));
+    memcpy(message + 257, box_name, strlen(box_name));
+    memset(message + 257 + strlen(box_name), '\0', 32 - strlen(box_name));
+    return message;
 }
 
 
@@ -104,36 +101,64 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
  * returns 0 on success, -1 on failure
  *
 */
-int sub_to_box(char* named_pipe, char* box_name) {
-    (void)named_pipe; // suppress unused parameter warning
-    (void)box_name; // suppress unused parameter warning
-    // open box_name
-    // read from box_name
-    // close box_name
+int sign_in(char *register_pipe_name, char* pipe_name, char *box_name) {
+    int pipe_fd = open(register_pipe_name, O_WRONLY);
+    if (pipe_fd < 0) { // error
+        return -1;
+    }
+
+    u_int8_t code = 2;
+    fprintf(stderr, "[INFO]: signing to box: %s\n", box_name);
+    char* message = create_message(code, pipe_name, box_name);
+    fprintf(stderr, "[INFO]: sending message: %s with len %ld\n", message, strlen(message));
+    if (write(pipe_fd, message, 289) < 0) { // error
+        return -1;
+    }
+
+    if (close(pipe_fd) < 0) { // error
+        return -1;
+    }
+
     return 0;
 }
 
 
 /*
  * format:
- *  - sub <register_pipe_name> <box_name>
+ *  - sub <register_pipe_name> <pipe_name> <box_name>
 */
 int main(int argc, char **argv) {
-    if (argc != 3) {
+    if (argc != 4) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
     }
  
     signal(SIGINT, sigint_handler); // register the SIGINT handler
 
-    // use select here to wait for input from stdin and the named pipe
-
     char* register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the subscriber wants to connect to
-    char* box_name = argv[2];           // box_name is the name of the box to which the subscriber wants to subscribe to
+    char* pipe_name = argv[2];          // pipe_name is the name of the pipe to which the subscriber wants to connect to
+    char* box_name = argv[3];           // box_name is the name of the box to which the subscriber wants to subscribe to
+
+    // unlink register_pipe_name if it already exists
+    if (unlink(pipe_name) < 0 && errno != ENOENT) {
+        return -1;
+    }
+
+    fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
+
+
+    if (mkfifo(pipe_name, 0666) < 0) {
+        fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
+        return -1;
+    }
+
+    if (sign_in(register_pipe_name, pipe_name, box_name) < 0) {
+        fprintf(stderr, "failed: could not sign in to box\n");
+        return -1;
+    }
     
-   int pipe_fd = open(register_pipe_name, O_RDONLY);
+    int pipe_fd = open(pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
-        perror("open");
         return -1;
     }
 
@@ -143,17 +168,13 @@ int main(int argc, char **argv) {
 
     while (!interrupted) {
         // wait for data to be available on the named pipe
+
+        signal(SIGINT, sigint_handler); // register the SIGINT handler
         
         if (read_pipe_input(pipe_fd, read_fds) < 0) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }
-
-        if (sub_to_box(register_pipe_name, box_name) < 0) {
-            fprintf(stderr, "failed: could not subscribe to box\n");
-            return -1;
-        }
-
     }
 
     // close the named pipe

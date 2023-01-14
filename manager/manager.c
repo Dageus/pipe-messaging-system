@@ -282,7 +282,7 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "[INFO]: creating named pipe: %s\n", pipe_name);
     // unlink pipe_name if it already exists
-    if (unlink(pipe_name) < 0) {
+    if (unlink(pipe_name) < 0 && errno != ENOENT) {
         fprintf(stderr, "failed: could not unlink pipe: %s\n", pipe_name);
         return -1;
     }

@@ -65,7 +65,15 @@ int box_in_list(char* box_name){
     return 0;
 }
 
-int spread_message(char* message, char* publisher_pipe_name) {
+char* create_message(u_int8_t code, char* message_to_write){
+    char *message = (char*) malloc(sizeof(char) * 1025);
+    memcpy(message, &code, sizeof(u_int8_t));
+    memcpy(message + 1, message_to_write, strlen(message_to_write));
+    memset(message + 1 + strlen(message_to_write), '\0', 1024 - strlen(message_to_write));
+    return message;
+}
+
+int spread_message(char* message_to_write, char* publisher_pipe_name) {
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
     box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
@@ -76,15 +84,20 @@ int spread_message(char* message, char* publisher_pipe_name) {
     // iterate through the subscribers and send message to their pipes
     subscriber_list_t* subscribers = box->subscribers;
     while (subscribers != NULL) {
+        fprintf(stderr, "[INFO]: Sending message to %s...\n", subscribers->subscriber->named_pipe);
         int pipe_fd = open(subscribers->subscriber->named_pipe, O_WRONLY);
         if (pipe_fd < 0) {
+            fprintf(stderr, "[ERROR]: Could not open pipe %s with error %s\n", subscribers->subscriber->named_pipe, strerror(errno));
             return -1;
         }
+        u_int8_t code = 10;
+        char* message = create_message(code, message_to_write);
         ssize_t num_bytes;
-        num_bytes = write(pipe_fd, message, strlen(message));
+        num_bytes = write(pipe_fd, message, 1025);
         if (num_bytes < 0) {
             return -1;
         }
+        fprintf(stderr, "[INFO]: Message sent to %s\n", subscribers->subscriber->named_pipe);
         subscribers = subscribers->next;
     }
 
@@ -200,10 +213,14 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
     if (box == NULL)
         return -1;
 
+    fprintf(stderr, "[INFO]: Registering subscriber %s to box %s...\n", client_named_pipe_path, box_name);
+
     // add the subscriber to the box
     subscriber_t* subscriber = malloc(sizeof(subscriber_t));
     strcpy(subscriber->named_pipe, client_named_pipe_path);
     strcpy(subscriber->box_name, box_name);
+
+    fprintf(stderr, "[INFO]: Subscriber %s registered to box %s\n", client_named_pipe_path, box_name);
 
     if (box->subscribers == NULL) {   // no subscribers yet
         box->subscribers = malloc(sizeof(subscriber_list_t));
@@ -214,6 +231,8 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         new_subscriber_node->subscriber = subscriber;
         new_subscriber_node->next = box->subscribers;
     }
+
+    fprintf(stderr, "[INFO]: Subscriber %s registered to box successfully\n", client_named_pipe_path);
 
     return 0;
 }
@@ -318,16 +337,22 @@ int write_to_box(char* box_name, char* message, size_t message_size){
         return -1;
     }
 
+    fprintf(stderr, "[INFO]: box_fd: %d\n", box_fd);
+
     // write the message to the box
     ssize_t num_bytes = tfs_write(box_fd, message, message_size);
     if (num_bytes < 0) {
         return -1;
     }
 
+    fprintf(stderr, "[INFO]: num_bytes: %ld\n", num_bytes);
+
     // close the box
     if (tfs_close(box_fd) < 0) {
         return -1;
     }
+
+    fprintf(stderr, "[INFO]: wrote to box successfully\n");
     
     return 0;
 }
@@ -383,6 +408,8 @@ int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_name
                 return -1;
             }
 
+            fprintf(stderr, "[INFO]: message: %s\n", message);
+
             // write to the box
             if (write_to_box(box_name, message, sizeof(message)) < 0) {
                 return -1;
@@ -429,6 +456,7 @@ int process_command(int pipe_fd, u_int8_t code) {
     {
         // register a publisher
         case 1:{
+            fprintf(stdout, "----------------------register publisher----------------------\n");
             char client_named_pipe_path[256];
             ssize_t num_bytes;
             num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
@@ -465,6 +493,7 @@ int process_command(int pipe_fd, u_int8_t code) {
         }
         // register a subscriber
         case 2:{
+            fprintf(stdout, "----------------------register subscriber----------------------\n");
             // parse the client pipe name
             char client_named_pipe_path[256];
             ssize_t num_bytes;
@@ -472,21 +501,26 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) { // error
                 return -1;
             }
+            fprintf(stdout, "[INFO]: client_named_pipe_path: %s\n", client_named_pipe_path);
             // parse the box name
             char box_name[32];
             num_bytes = read(pipe_fd, box_name, sizeof(box_name));
             if (num_bytes < 0) { // error
                 return -1;
             }
+            fprintf(stdout, "[INFO]: box_name: %s\n", box_name);
             // register the subscriber
             if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
                 return -1;
             }
+
+            fprintf(stdout, "[INFO]: Subscriber registered\n");
             
             break;
         }
         // create a box
         case 3:{
+            fprintf(stdout, "---------------------create box----------------------\n");
             // parse the client pipe name
             char client_named_pipe_path[256];
             ssize_t num_bytes;
@@ -539,6 +573,7 @@ int process_command(int pipe_fd, u_int8_t code) {
         }
         // remove a box
         case 5:{    
+            fprintf(stdout, "----------------------remove a box----------------------\n");
             // parse the client pipe name
             char client_named_pipe_path[256];
             ssize_t num_bytes;
@@ -584,6 +619,7 @@ int process_command(int pipe_fd, u_int8_t code) {
         }
         // list boxes
         case 7:{
+            fprintf(stdout, "----------------------list boxes----------------------\n");
             // parse the client pipe name
             char client_named_pipe_path[256];
             ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
@@ -638,16 +674,6 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
 }
 
 /*
-void add_box_to_list(char* box_name){
-    // find the last box in the list
-    while (box_list != NULL) {
-        box_list = box_list->next;
-    }
-    // add the new box to the list
-    box_list->next = new_node(box_name);
-}*/
-
-/*
  * format:
  *  - mbroker <register_pipe_name> <max_sessions>
  */
@@ -672,7 +698,7 @@ int main(int argc, char **argv) {
     
 
     // unlink register_pipe_name if it already exists
-    if (unlink(mbroker->register_pipe_name) < 0) {
+    if (unlink(mbroker->register_pipe_name) < 0 && errno != ENOENT) {
         return -1;
     }
 
@@ -708,7 +734,6 @@ int main(int argc, char **argv) {
             fprintf(stderr, "failed: could not check for pipe input\n");
             return -1;
         }
-    
     }
 
     if (tfs_destroy() < 0) {
