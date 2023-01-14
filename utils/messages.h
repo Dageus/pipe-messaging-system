@@ -7,7 +7,7 @@ void subscriber_message(const char* message) {
     fprintf(stdout, "%s\n", message);
 }
 
-void list_boxes(const char* box_name, size_t box_size, size_t n_publishers, size_t n_subscribers){
+void list_boxes_message(const char* box_name, size_t box_size, size_t n_publishers, size_t n_subscribers){
     fprintf(stdout, "%s %zu %zu %zu\n", box_name, box_size, n_publishers, n_subscribers);
 }
 

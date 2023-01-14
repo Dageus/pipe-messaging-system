@@ -18,7 +18,7 @@
 #define OP_CODE_REGISTER_SUBSCRIBER 2
 #define OP_CODE_REGISTER_BOX        3
 #define OP_CODE_ANSWER_TO_CREATION  4
-#define OP_CODE_BOX_REMOVAL         5
+#define OP_CODE_REMOVE_BOX          5
 #define OP_CODE_ANSWER_TO_REMOVAL   6
 #define OP_CODE_BOX_LIST            7
 #define OP_CODE_ANSWER_TO_LIST      8

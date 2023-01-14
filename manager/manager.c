@@ -125,7 +125,6 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
         if (num_bytes == 0) {
             // num_bytes == 0 indicates EOF
-            fprintf(stderr, "[INFO]: pipe closed\n");
             return 0;
         } else if (num_bytes == -1) {
             // num_bytes == -1 indicates error

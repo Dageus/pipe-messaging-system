@@ -31,7 +31,7 @@ pc_queue_t *pc_queue = NULL;
 
 pthread_t *thread_array = NULL;
 
-pthread_mutex_t mutex;  // define the mutex
+static pthread_mutex_t g_library_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // array to keep track of the sessions
 
@@ -41,55 +41,71 @@ pthread_mutex_t mutex;  // define the mutex
 // subtract 1 to the open sessions
 
 box_t* get_box_by_publisher_pipe(char* publisher_pipe_name) {
-    //pthread_mutex_lock(&mutex); // lock the mutex
+    // lock the mutex
+    if (pthread_mutex_lock(&g_library_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return NULL;
+    } 
     // find the box that has the publisher pipe
     box_list_t* box_node = box_list;
     while (box_node != NULL) {
         if (strcmp(box_node->box->publisher_named_pipe, publisher_pipe_name) == 0) {
-            pthread_mutex_unlock(&mutex); // unlock the mutex
+            pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
             return box_node->box;
         }
         box_node = box_node->next;
     }
-    pthread_mutex_unlock(&mutex); // unlock the mutex
+    pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
     return NULL;
 }
 
 int box_in_list(char* box_name){
-    pthread_mutex_lock(&mutex); // lock the mutex
+    // lock the mutex
+    if (pthread_mutex_lock(&g_library_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    } 
     box_list_t* box_node = box_list;
     while (box_node != NULL) {
         if (strcmp(box_node->box->box_name, box_name) == 0) {
-            pthread_mutex_unlock(&mutex); // unlock the mutex
+            pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
             return 1;
         }
         box_node = box_node->next;
     }
-    pthread_mutex_unlock(&mutex); // unlock the mutex
+    pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
     return 0;
 }
 
 
 char* create_message(u_int8_t code, char* message_to_write){
-    pthread_mutex_lock(&mutex); // lock the mutex
+    // lock the mutex
+    if (pthread_mutex_lock(&g_library_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return NULL;
+    } 
     char *message = (char*) malloc(sizeof(char) * 1025);
     memcpy(message, &code, sizeof(u_int8_t));
     memcpy(message + 1, message_to_write, strlen(message_to_write));
     memset(message + 1 + strlen(message_to_write), '\0', 1024 - strlen(message_to_write));
-    pthread_mutex_unlock(&mutex); // unlock the mutex
+    pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
     return message;
 }
 
 
 int spread_message(char* message_to_write, char* publisher_pipe_name) {
+    // lock the mutex
+    if (pthread_mutex_lock(&g_library_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    } 
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
-    fprintf(stderr, "[INFO]: Spreading message...\n");
     box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
     if (box == NULL) {  // if the box does not exist
+        pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
         return -1;
     }
-    fprintf(stderr, "[INFO]: Box found: %s\n", box->box_name);
 
     // iterate through the subscribers and send message to their pipes
     subscriber_list_t* subscribers = box->subscribers;
@@ -98,6 +114,7 @@ int spread_message(char* message_to_write, char* publisher_pipe_name) {
         int pipe_fd = open(subscribers->subscriber->named_pipe, O_WRONLY);
         if (pipe_fd < 0) {
             fprintf(stderr, "[ERROR]: Could not open pipe %s with error %s\n", subscribers->subscriber->named_pipe, strerror(errno));
+            pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
             return -1;
         }
         u_int8_t code = 10;
@@ -105,14 +122,17 @@ int spread_message(char* message_to_write, char* publisher_pipe_name) {
         ssize_t num_bytes;
         num_bytes = write(pipe_fd, message, 1025);
         if (num_bytes < 0) {
+            pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
             return -1;
         }
         fprintf(stderr, "[INFO]: Message sent to %s\n", subscribers->subscriber->named_pipe);
         subscribers = subscribers->next;
     }
 
+    pthread_mutex_unlock(&g_library_mutex); // unlock the mutex
     return 0;
 }
+
 
 box_t* find_box_by_name(char* box_name) {
     //Find the box in the list
@@ -141,8 +161,9 @@ char* create_answer(u_int8_t code, int32_t return_code, char* error_message, uns
 
 int create_box_command(char* box_name){
     // Verify if the box already exists
-    if (find_box_by_name(box_name) != NULL)
+    if (find_box_by_name(box_name) != NULL){
         return -1;
+    }
 
     // Create the box
     int box_fd = tfs_open(box_name, TFS_O_CREAT);
@@ -193,7 +214,6 @@ int remove_box_command(char* box_name) {
     return 0;
 }
 
-
 int register_publisher_command(char* client_named_pipe_path, char* box_name) {
     // Find box in the list
     box_t* box = find_box_by_name(box_name);
@@ -211,6 +231,23 @@ int register_publisher_command(char* client_named_pipe_path, char* box_name) {
 
     // Add the publisher to the box
     box->publisher_named_pipe = client_named_pipe_path;
+
+    return 0;
+}
+
+int remove_publisher_command(char* client_named_pipe_path, char* box_name) {
+    // Find box in the list
+    box_t* box = find_box_by_name(box_name);
+    if (box == NULL)
+        return -1;
+
+    // Verify if the publisher is the one we want to remove
+    if (strcmp(box->publisher_named_pipe, client_named_pipe_path) != 0){
+        return -1;
+    }
+
+    // Remove the publisher
+    box->publisher_named_pipe = NULL;
 
     return 0;
 }
@@ -244,10 +281,6 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
 
     return 0;
 }
-
-
-// completed functions
-
 
 // message format:
 //[ code = 8 (uint8_t) ] | [ last (uint8_t) ] | [ box_name (char[32]) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
@@ -372,65 +405,61 @@ int read_from_box(char* box_name, char* message, size_t message_size){
     return 0;
 }
 
+int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box_name) {
 
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
 
-
-int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_named_pipe, char* box_name) {
     int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
     if (sel < 0) {
         return -1;
-    } else {
-        // data is available on the named pipe
-        // read the data from the pipe
-        fprintf(stderr, "[INFO]: data is available on the named pipe\n");
-        //pthread_mutex_lock(&mutex);   // lock the mutex
-        u_int8_t code;
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, &code, sizeof(code));
-        fprintf(stderr, "num_bytes: %ld\n", num_bytes);
-        if (num_bytes == 0) {
-            // num_bytes == 0 indicates EOF
-            pthread_mutex_unlock(&mutex);  // unlock the mutex
-            return 1;
-        } else if (num_bytes == -1) {
-            // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            pthread_mutex_unlock(&mutex);  // unlock the mutex
-            exit(EXIT_FAILURE);
-        }
+    } 
+    // data is available on the named pipe
+    // read the data from the pipe
 
-        fprintf(stderr, "code: %d\n", code);
+    //pthread_mutex_lock(&mutex);   // lock the mutex
 
-        if (code == 9){
-            fprintf(stderr, "[INFO]: received message from publisher\n");
-            char message[1024];
-            num_bytes = read(pipe_fd, message, sizeof(message));
-            if (num_bytes < 0) { // error
-                pthread_mutex_unlock(&mutex);  // unlock the mutex
-                return -1;
-            }
+    u_int8_t code;
+    ssize_t num_bytes;
 
-            fprintf(stderr, "[INFO]: message: %s\n", message);
-
-            // write to the box
-            if (write_to_box(box_name, message, sizeof(message)) < 0) {
-                pthread_mutex_unlock(&mutex);  // unlock the mutex
-                return -1;
-            }
-
-            fprintf(stderr, "[INFO]: spreading messages\n");
-
-            // send the message to all the subscribers of the box
-            if (spread_message(message, publisher_named_pipe) < 0) {
-                pthread_mutex_unlock(&mutex);  // unlock the mutex
-                return -1;
-            }
-        }
-        pthread_mutex_unlock(&mutex);  // unlock the mutex
+    num_bytes = read(pipe_fd, &code, sizeof(code));
+    if (num_bytes == 0) {
+        // num_bytes == 0 indicates EOF
+        pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
+        return 1;
+    } else if (num_bytes == -1) {
+        // num_bytes == -1 indicates error
+        fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+        pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
+        exit(EXIT_FAILURE);
     }
+
+    if (code == 9){
+        fprintf(stderr, "[INFO]: received message from publisher\n");
+
+        char message[1024];
+        num_bytes = read(pipe_fd, message, sizeof(message));
+        if (num_bytes < 0) { // error
+            pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
+            return -1;
+        }
+
+        // write to the box
+        if (write_to_box(box_name, message, sizeof(message)) < 0) {
+            pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
+            return -1;
+        }
+
+        // send the message to all the subscribers of the box
+        if (spread_message(message, publisher_named_pipe) < 0) {
+            pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
+            return -1;
+        }
+    }
+    pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
     return 0;
 }
-
 
 int listen_to_publisher(char* publisher_named_pipe, char* box_name){
     // find the publisher in the box list
@@ -439,166 +468,267 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
         return -1;
     }
 
-    fprintf(stderr, "[INFO]: pipe_fd: %d\n", pipe_fd);
-
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(pipe_fd, &read_fds);
     while(true){
         fprintf(stderr, "[INFO]: listening to publisher\n");
-        pthread_mutex_lock(&mutex);   // lock the mutex
+        // lock the mutex
+        if (pthread_mutex_lock(&g_library_mutex) == -1) {
+            WARN("failed to lock mutex: %s", strerror(errno));
+            return -1;
+        }   
         // read the message from the pipe
         // send the message to the subscribers
-        int ret = read_publisher_pipe_input(pipe_fd, read_fds, publisher_named_pipe, box_name);
+        int ret = read_publisher_pipe_input(pipe_fd, publisher_named_pipe, box_name);
         if (ret < 0) {
-            pthread_mutex_unlock(&mutex);  // unlock the mutex
+            pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
             return -1;
         } else if (ret == 1){
-            pthread_mutex_unlock(&mutex);  // unlock the mutex
+            pthread_mutex_unlock(&g_library_mutex);  // unlock the mutex
             break;
         }
     }
     return 0;
 }
 
-int process_command(int pipe_fd, u_int8_t code) {
-    // read the message from the pipe
-    switch (code)
-    {
+int register_publisher(int pipe_fd){
+    // Verify that the pipe is open
+    if (pipe_fd < 0) {
+        return -1;
+    }
+
+    // parse the client named pipe path
+    char client_named_pipe_path[256];
+    ssize_t num_bytes;
+    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+    
+    // parse the box name
+    char box_name[32];
+    num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+
+    // register the publisher
+    if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
+        return -1;
+    }
+
+    // listen to the publisher on his pipe in a new thread
+    if (listen_to_publisher(client_named_pipe_path, box_name) < 0) {
+        return -1;
+    } else if (listen_to_publisher(client_named_pipe_path, box_name) == 0){
+        // the publisher has closed the pipe
+        // remove the publisher from the box list
+        if (remove_publisher_command(client_named_pipe_path, box_name) < 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+
+}
+
+int register_subscriber(int pipe_fd){
+    // Verify that the pipe is open
+    if (pipe_fd < 0) {
+        return -1;
+    }
+
+    // parse the client named pipe path
+    char client_named_pipe_path[256];
+    ssize_t num_bytes;
+    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+
+    // parse the box name
+    char box_name[32];
+    num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+
+    // register the subscriber
+    if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
+        return -1;
+    }
+    
+    return 0;
+}
+
+int register_box(int pipe_fd){
+    // Verify that the pipe is open
+    if (pipe_fd < 0) {
+        return -1;
+    }
+
+    // parse the client named pipe path
+    char client_named_pipe_path[256];
+    ssize_t num_bytes;
+    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+    fprintf(stderr, "[INFO]: client_named_pipe_path: %s\n", client_named_pipe_path);
+
+    // parse the box name
+    char box_name[32];
+    num_bytes = read(pipe_fd, box_name, sizeof(char)*32);
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+    fprintf(stderr, "[INFO]: box_name: %s\n", box_name);
+
+    // create the box
+    int32_t return_code = create_box_command(box_name);
+    u_int8_t op_code = 4;
+    char *answer = create_answer(op_code, return_code, "henlo", ANSWER_MESSAGE_SIZE);
+    if (return_code < 0) {
+        return -1;
+    }
+
+    // open client pipe
+    int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
+    if (client_pipe_fd < 0) {
+        return -1;
+    }
+
+    // send the answer to the client
+    if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
+        return -1;
+    }
+
+    // close the client pipe
+    if (close(client_pipe_fd) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int remove_box(int pipe_fd){
+    // Verify that the pipe is open
+    if (pipe_fd < 0) {
+        return -1;
+    }
+
+    // parse the client named pipe path
+    char client_named_pipe_path[256];
+    ssize_t num_bytes;
+    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+
+    // parse the box name
+    char box_name[32];
+    num_bytes = read(pipe_fd, box_name, sizeof(box_name));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+
+    // remove the box
+    int32_t return_code = remove_box_command(box_name);
+    u_int8_t op_code = 6;
+    char *answer = create_answer(op_code, return_code, "henloo 2", ANSWER_MESSAGE_SIZE);
+    if (return_code < 0) {
+        return -1;
+    }
+
+    // open client pipe
+    int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
+    if (client_pipe_fd < 0) {
+        return -1;
+    }
+
+    // send the answer to the client
+    if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
+        return -1;
+    }
+
+    // close the client pipe
+    if (close(client_pipe_fd) < 0) {
+        return -1;
+    }
+    
+    return 0;
+
+}
+
+int list_boxes(int pipe_fd){
+    // Verify that the pipe is open
+    if (pipe_fd < 0) {
+        return -1;
+    }
+
+    // parse the client pipe name
+    char client_named_pipe_path[256];
+    ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+    if (num_bytes < 0) { // error
+        return -1;
+    }
+    // send the list of boxes to the client
+
+    if (list_boxes_command(client_named_pipe_path) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_pipe_input(int pipe_fd){
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
+
+    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
+    if (sel < 0) {
+        return -1;
+    }
+
+    // data is available on the named pipe
+    // read the data from the pipe
+    u_int8_t code;
+    ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+    if (num_bytes == 0) {
+        // num_bytes == 0 indicates EOF
+        return 0;
+    } else if (num_bytes == -1) {
+        // num_bytes == -1 indicates erro
+        exit(EXIT_FAILURE);
+    }
+
+    switch (code) {
         // register a publisher
         case OP_CODE_REGISTER_PUBLISHER:{
-            // parse the client named pipe path
-            char client_named_pipe_path[256];
-            ssize_t num_bytes;
-            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-            if (num_bytes < 0) { // error
+            if (register_publisher(pipe_fd) < 0){
                 return -1;
             }
             
-            // parse the box name
-            char box_name[32];
-            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-            if (num_bytes < 0) { // error
-                return -1;
-            }
-
-            // register the publisher
-            if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
-                return -1;
-            }
-
-            // listen to the publisher on his pipe in a new thread
-            if (listen_to_publisher(client_named_pipe_path, box_name) < 0) {
-                return -1;
-            }
-
             break;
         }
         // register a subscriber
         case OP_CODE_REGISTER_SUBSCRIBER:{
-            // parse the client named pipe path
-            char client_named_pipe_path[256];
-            ssize_t num_bytes;
-            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-            if (num_bytes < 0) { // error
+            if (register_subscriber(pipe_fd) < 0){
                 return -1;
             }
-
-            // parse the box name
-            char box_name[32];
-            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-            if (num_bytes < 0) { // error
-                return -1;
-            }
-
-            // register the subscriber
-            if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
-                return -1;
-            }
-
+            
             break;
         }
         // create a box
         case OP_CODE_REGISTER_BOX:{
-            // parse the client named pipe path
-            char client_named_pipe_path[256];
-            ssize_t num_bytes;
-            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
-            if (num_bytes < 0) { // error
+            if (register_box(pipe_fd) < 0){
                 return -1;
             }
-
-            // parse the box name
-            char box_name[32];
-            num_bytes = read(pipe_fd, box_name, sizeof(char)*32);
-            if (num_bytes < 0) { // error
-                return -1;
-            }
-
-            // create the box
-            int32_t return_code = create_box_command(box_name);
-            u_int8_t op_code = 4;
-            char *answer = create_answer(op_code, return_code, "henlo", ANSWER_MESSAGE_SIZE);
-            if (return_code < 0) {
-                return -1;
-            }
-
-            // open client pipe
-            int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
-            if (client_pipe_fd < 0) {
-                return -1;
-            }
-
-            // send the answer to the client
-            if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
-                return -1;
-            }
-
-            // close the client pipe
-            if (close(client_pipe_fd) < 0) {
-                return -1;
-            }
-
+            
             break;
         }
         // remove a box
-        case OP_CODE_BOX_REMOVAL:{    
-            // parse the client named pipe path
-            char client_named_pipe_path[256];
-            ssize_t num_bytes;
-            num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-            if (num_bytes < 0) { // error
-                return -1;
-            }
-
-            // parse the box name
-            char box_name[32];
-            num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-            if (num_bytes < 0) { // error
-                return -1;
-            }
-
-            // remove the box
-            int32_t return_code = remove_box_command(box_name);
-            u_int8_t op_code = 6;
-            char *answer = create_answer(op_code, return_code, "henloo 2", ANSWER_MESSAGE_SIZE);
-            if (return_code < 0) {
-                return -1;
-            }
-
-            // open client pipe
-            int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
-            if (client_pipe_fd < 0) {
-                return -1;
-            }
-
-            // send the answer to the client
-            if (write(client_pipe_fd, answer, sizeof(answer)) < 0) {
-                return -1;
-            }
-
-            // close the client pipe
-            if (close(client_pipe_fd) < 0) {
+        case OP_CODE_REMOVE_BOX:{    
+            if (remove_box(pipe_fd) < 0){
                 return -1;
             }
             
@@ -606,18 +736,10 @@ int process_command(int pipe_fd, u_int8_t code) {
         }
         // list boxes
         case OP_CODE_BOX_LIST:{
-            // parse the client pipe name
-            char client_named_pipe_path[256];
-            ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-            if (num_bytes < 0) { // error
+            if (list_boxes(pipe_fd) < 0){
                 return -1;
             }
-            // send the list of boxes to the client
-
-            if (list_boxes_command(client_named_pipe_path) < 0) {
-                return -1;
-            }
-        
+            
             break;
         }
         default:{                
@@ -627,38 +749,10 @@ int process_command(int pipe_fd, u_int8_t code) {
     }
 
     return 0;
-
-}
-
-int read_pipe_input(int pipe_fd, fd_set read_fds) {
-    int sel = select(pipe_fd + 1, &read_fds, NULL, NULL, NULL);
-    if (sel < 0) {
-        return -1;
-    } else {
-        // data is available on the named pipe
-        // read the data from the pipe
-        u_int8_t code;
-        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
-        if (num_bytes == 0) {
-            // num_bytes == 0 indicates EOF
-            return 0;
-        } else if (num_bytes == -1) {
-            // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
-
-        if (process_command(pipe_fd, code) < 0) {
-            return -1;
-        }
-
-    }
-
-    return 0;
 }
 
 /*
-void *session_thread(void *arg) {
+void *session_thread() {
     void (thread_func) (void *);
     while (true) {
         session_t* data = (session_t *)pcq_dequeue(pc_queue);
@@ -733,7 +827,6 @@ int close_mbroker(){
  *  - mbroker <register_pipe_name> <max_sessions>
  */
 int main(int argc, char **argv) {
-    
     if (argc != 3) {
         fprintf(stderr, "failed: not enough arguments\n");
         return -1;
@@ -743,8 +836,8 @@ int main(int argc, char **argv) {
 
     mbroker = (mbroker_t*) malloc(sizeof(mbroker_t));
 
-    mbroker->register_pipe_name = argv[1]; // register_pipe_name is the name of the pipe to which the manager wants to connect to
-    mbroker->max_sessions = (size_t) atoi(argv[2]);       // max_sessions is the maximum number of sessions that can be open at the same time
+    mbroker->register_pipe_name = argv[1];              // register_pipe_name is the name of the pipe to which the manager wants to connect to
+    mbroker->max_sessions = (size_t) atoi(argv[2]);     // max_sessions is the maximum number of sessions that can be open at the same time
     
     // initialize the mbroker
     if (init_mbroker(mbroker) < 0) {
@@ -752,19 +845,16 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    fprintf(stderr, "[INFO]: mbroker started\n");
+
     int pipe_fd = open(mbroker->register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {
         return -1;
     }
 
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(pipe_fd, &read_fds);
-
     while (true) {
-        // wait for data to be available on the named pipe
-        if (read_pipe_input(pipe_fd, read_fds) < 0) {
-            fprintf(stderr, "failed: could not check for pipe input\n");
+        if (read_pipe_input(pipe_fd) < 0) {
+            fprintf(stderr, "failed: could not read pipe input\n");
             return -1;
         }
     }
