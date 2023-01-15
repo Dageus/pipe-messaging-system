@@ -413,6 +413,8 @@ int remove_publisher_command(char* client_named_pipe_path, char* box_name) {
     // Remove the publisher
     box->publisher_named_pipe = NULL;
 
+    fprintf(stderr, "Publisher removed from box %s\n", box_name);
+
     // unlock the mutex
     if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
         WARN("failed to unlock mutex: %s", strerror(errno));
@@ -762,11 +764,19 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
     while(true){
         int ret = read_publisher_pipe_input(pipe_fd, publisher_named_pipe, box_name);
         if (ret < 0) {
+            if (close(pipe_fd) == -1) {
+                fprintf(stderr, "failed: could not close pipe: %s\n", publisher_named_pipe);
+                return -1;
+            }
             return -1;
         } else if (ret == 1){
             fprintf(stderr, "publisher disconnected\n");
             break;
         }
+    }
+    if (close(pipe_fd) == -1) {
+        fprintf(stderr, "failed: could not close pipe: %s\n", publisher_named_pipe);
+        return -1;
     }
     return 0;
 }
@@ -791,6 +801,8 @@ int register_publisher(int pipe_fd){
     if (num_bytes < 0) { // error
         return -1;
     }
+
+    fprintf(stderr, "registering publisher: %s, box: %s\n", client_named_pipe_path, box_name);
 
     // register the publisher
     if (register_publisher_command(client_named_pipe_path, box_name) < 0) {

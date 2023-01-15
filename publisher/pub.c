@@ -62,7 +62,7 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
 
 int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
     if (register_pipe_name == NULL || pipe_name == NULL || box_name == NULL) {
-        failed(stderr, "failed: one or more of the arguments is NULL\n");
+        fprintf(stderr, "failed: one or more of the arguments is NULL\n");
         return -1;
     }
     if (strlen(register_pipe_name) > MAX_NAMED_PIPE_SIZE) {
