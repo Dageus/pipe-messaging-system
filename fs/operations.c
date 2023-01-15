@@ -302,6 +302,9 @@ int tfs_rewind_offset(int fhandle) {
     ALWAYS_ASSERT(inode != NULL, "tfs_rewind: inode of open file deleted");
 
     // The offset associated with the file handle is set to 0
+    if (file->of_offset == 0)  {
+        return 0;
+    }
     file->of_offset = 0;
 
     if (pthread_mutex_unlock(&g_library_mutex) == -1) {

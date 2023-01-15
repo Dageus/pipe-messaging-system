@@ -43,7 +43,7 @@ int read_pipe_input(int pipe_fd) {
             return 0;
         } else if (num_bytes == -1) {
             // num_bytes == -1 indicates error
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            fprintf(stderr, "failed: read failed: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
 
@@ -58,7 +58,7 @@ int read_pipe_input(int pipe_fd) {
             subscriber_message(message);
             messages_received++;
         } else {
-            fprintf(stderr, "[ERR]: unknown code: %d\n", code);
+            fprintf(stderr, "failed: unknown code: %d\n", code);
             return -1;
         }
     }
@@ -124,7 +124,7 @@ int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
 
 void close_subscriber(int exit_code) {
     // print the number of messages received
-    fprintf(stderr, "\n[INFO]: received %d messages\n", messages_received);
+    fprintf(stderr, "\nreceived %d messages\n", messages_received);
     exit(exit_code);
 }
 

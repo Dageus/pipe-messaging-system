@@ -59,8 +59,6 @@ int process_command(char* answer) {
         size_t box_size;
         memcpy(&box_size, answer + sizeof(code) + sizeof(last) + sizeof(box_name), sizeof(box_size));
 
-        fprintf(stdout, "box_size: %zu\n", box_size);
-
         // parse the numer of publishers
         size_t n_publishers;
         memcpy(&n_publishers, answer + sizeof(code) + sizeof(last) + sizeof(box_name) + sizeof(box_size), sizeof(n_publishers));

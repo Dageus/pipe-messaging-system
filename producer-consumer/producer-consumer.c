@@ -65,7 +65,6 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     }
     session_t *session;
     memcpy(&session, elem, sizeof(session_t*));
-    printf("Enqueueing session %d, request: %s\n", session->pipe_fd, session->request);
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
     if (pthread_mutex_lock(&queue->pcq_current_size_lock) != 0) {
@@ -99,7 +98,6 @@ void *pcq_dequeue(pc_queue_t *queue) {
     }
     
     while (queue->pcq_current_size == 0) {
-        fprintf(stderr, "DEQUEUE WAITING...\n");
         if (pthread_cond_wait(&queue->pcq_popper_condvar, &queue->pcq_popper_condvar_lock) != 0) {
             return NULL;
         }

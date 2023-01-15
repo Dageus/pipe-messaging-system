@@ -21,7 +21,7 @@ int send_message(int pipe_fd, char const *message_written) {
     memset(message + sizeof(u_int8_t) + strlen(message_written), '\0', 1024 - strlen(message_written));
 
     if (write(pipe_fd, message, 1025) < 0) { // error
-        fprintf(stderr, "[ERROR]: could not write to pipe\n");
+        fprintf(stderr, "failed: could not write to pipe\n");
         return -1;
     }
 
@@ -41,19 +41,19 @@ char* create_message(u_int8_t code, char const *pipe_name, char const *box_name)
 int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
     int pipe_fd = open(register_pipe_name, O_WRONLY);
     if (pipe_fd < 0) { // error
-        fprintf(stderr, "[ERROR]: could not open register pipe\n");
+        fprintf(stderr, "failed: could not open register pipe\n");
         return -1;
     }
 
     u_int8_t code = OP_CODE_REGISTER_PUBLISHER;
     char* message = create_message(code, pipe_name, box_name);
     if (write(pipe_fd, message, 289) < 0) { // error
-        fprintf(stderr, "[ERROR]: could not write to register pipe\n");
+        fprintf(stderr, "failed: could not write to register pipe\n");
         return -1;
     }
     
     if (close(pipe_fd) < 0) { // error
-        fprintf(stderr, "[ERROR]: could not close register pipe\n");
+        fprintf(stderr, "failed: could not close register pipe\n");
         return -1;
     }
 
@@ -62,7 +62,7 @@ int sign_in(char *register_pipe_name, char *pipe_name, char *box_name) {
 
 int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
     if (register_pipe_name == NULL || pipe_name == NULL || box_name == NULL) {
-        fprintf(stderr, "failed: one or more of the arguments is NULL\n");
+        failed(stderr, "failed: one or more of the arguments is NULL\n");
         return -1;
     }
     if (strlen(register_pipe_name) > MAX_NAMED_PIPE_SIZE) {
