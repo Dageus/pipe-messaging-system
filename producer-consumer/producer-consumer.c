@@ -4,25 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-/*
-    ->Create the queue using the pcq_create function, and set its capacity.
-
-    ->Create a number of threads using the pthread_create function, 
-    passing in a function that will run when the thread is started. 
-    This function will typically include a loop that calls pcq_dequeue to 
-    remove elements from the queue and process them.
-
-    ->When a new client connects to the server, 
-    create a new thread and assign it to a function that will handle the client's requests. 
-    This function will typically include a loop that calls pcq_enqueue to
-    add elements to the queue for the other threads to process.
-
-    ->Use the pthread_join function in the main thread to wait for the worker threads to 
-    complete their tasks before the main thread exits.
-
-    ->Use the pcq_destroy function to release the resources of the queue when the server is shutting down.
-*/
-
 // functions from producer-consumer.h
 int pcq_create(pc_queue_t *queue, size_t capacity) {
     queue->pcq_capacity = capacity;
@@ -41,7 +22,6 @@ int pcq_create(pc_queue_t *queue, size_t capacity) {
     pthread_cond_init(&queue->pcq_pusher_condvar, NULL);
     pthread_cond_init(&queue->pcq_popper_condvar, NULL);
     return 0;
-
 }
 
 int pcq_destroy(pc_queue_t *queue) {
@@ -83,8 +63,9 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     if (pthread_mutex_lock(&queue->pcq_tail_lock) != 0) {
         return -1;
     }
-    session_t *session = (session_t*) elem;
-    printf("Enqueueing session %d, op_code: %d\n", session->pipe_fd, session->op_code);
+    session_t *session;
+    memcpy(&session, elem, sizeof(session_t*));
+    printf("Enqueueing session %d, request: %s\n", session->pipe_fd, session->request);
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
     if (pthread_mutex_lock(&queue->pcq_current_size_lock) != 0) {
@@ -97,7 +78,6 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     if (pthread_mutex_unlock(&queue->pcq_tail_lock) != 0) {
         return -1;
     }
-
     if (pthread_mutex_lock(&queue->pcq_popper_condvar_lock) != 0) {
         return -1;
     }
@@ -133,7 +113,7 @@ void *pcq_dequeue(pc_queue_t *queue) {
         return NULL;
     }
     void* elem = queue->pcq_buffer[queue->pcq_head];
-    queue->pcq_head = queue->pcq_head + 1;
+    queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity;
     if (pthread_mutex_lock(&queue->pcq_current_size_lock) != 0){
         return NULL;
     }

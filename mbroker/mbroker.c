@@ -38,7 +38,7 @@ pthread_t *thread_array = NULL;
 // mutex to lock the box_list
 static pthread_mutex_t box_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// array to keep track of the pipes
+volatile sig_atomic_t stop = 0;
 
 box_t* get_box_by_publisher_pipe(char* publisher_pipe_name) {
     fprintf(stderr, "in get_box_by_publisher_pipe\n");
@@ -165,7 +165,7 @@ int32_t create_box_command(char* box_name){
     } else {
         fprintf(stdout, "FIRST BOX NAME IN LIST: %s\n", box_list->box->box_name);
         box_list_t* box_node = box_list;
-        while (box_node->next != NULL){
+        while (box_node->next != NULL && strcmp(box_node->box->box_name, box_name) < 0){
             box_node = box_node->next;
         }
         box_list_t* new_box_node = (box_list_t*) malloc(sizeof(box_list_t));
@@ -452,9 +452,9 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
     // subscriber listens to box for new messages
     while (true){
         // wait for the condition variable to be signaled
-        if (pthread_cond_wait(&box->box_cond, &box_list_mutex) != 0) {
-            return -1;
-        }
+        //if (pthread_cond_wait(&box->box_cond, &box_list_mutex) != 0) {
+        //    return -1;
+        //}
 
         //GET THE MESSAGES FROM THE BOX
 
@@ -490,6 +490,7 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
                 }
                 return 0;
             }
+            fprintf(stderr, "[ERROR]: Could not write to pipe %s\n", client_named_pipe_path);
             return -1;
         }
     }
@@ -775,7 +776,7 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
     return 0;
 }
 
-int register_publisher(int pipe_fd){
+int register_publisher(int pipe_fd, char* request){
     // Verify that the pipe is open
     if (pipe_fd < 0) {
         return -1;
@@ -783,18 +784,11 @@ int register_publisher(int pipe_fd){
 
     // parse the client named pipe path
     char client_named_pipe_path[256];
-    ssize_t num_bytes;
-    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(client_named_pipe_path, request + 1, sizeof(client_named_pipe_path));
     
     // parse the box name
     char box_name[32];
-    num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(box_name, request + 1 + sizeof(client_named_pipe_path), sizeof(box_name));
 
     // register the publisher
     if (register_publisher_command(client_named_pipe_path, box_name) < 0) {
@@ -816,7 +810,7 @@ int register_publisher(int pipe_fd){
     return 0;
 }
 
-int register_subscriber(int pipe_fd){
+int register_subscriber(int pipe_fd, char* request){
     // verify that the pipe is open
     if (pipe_fd < 0) {
         return -1;
@@ -824,18 +818,11 @@ int register_subscriber(int pipe_fd){
 
     // parse the client named pipe path
     char client_named_pipe_path[256];
-    ssize_t num_bytes;
-    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(client_named_pipe_path, request + 1, sizeof(client_named_pipe_path));
 
     // parse the box name
     char box_name[32];
-    num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(box_name, request + 1 + sizeof(client_named_pipe_path), sizeof(box_name));
 
     // register the subscriber
     if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
@@ -845,7 +832,7 @@ int register_subscriber(int pipe_fd){
     return 0;
 }
 
-int register_box(int pipe_fd){
+int register_box(int pipe_fd, char* request){
     // Verify that the pipe is open
     if (pipe_fd < 0) {
         return -1;
@@ -853,25 +840,17 @@ int register_box(int pipe_fd){
 
     // parse the client named pipe path
     char client_named_pipe_path[256];
-    ssize_t num_bytes;
-    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(client_named_pipe_path, request + 1, sizeof(client_named_pipe_path));
 
     // parse the box name
     char box_name[32];
-    num_bytes = read(pipe_fd, box_name, sizeof(char)*32);
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(box_name, request + 1 + sizeof(client_named_pipe_path), sizeof(box_name));
 
     // create the box
     int32_t return_code = create_box_command(box_name);
     u_int8_t op_code = OP_CODE_ANSWER_TO_CREATION;
     char *error_message = "failed: could not register box";
     char *answer = create_answer(op_code, return_code, error_message, ANSWER_MESSAGE_SIZE);
-    fprintf(stderr, "answer: %s\n", answer);
 
     // open client pipe
     int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
@@ -892,7 +871,7 @@ int register_box(int pipe_fd){
     return 0;
 }
 
-int remove_box(int pipe_fd){
+int remove_box(int pipe_fd, char* request){
     // verify that the pipe is open
     if (pipe_fd < 0) {
         return -1;
@@ -900,18 +879,11 @@ int remove_box(int pipe_fd){
 
     // parse the client named pipe path
     char client_named_pipe_path[256];
-    ssize_t num_bytes;
-    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(client_named_pipe_path, request + 1, sizeof(client_named_pipe_path));
 
     // parse the box name
     char box_name[32];
-    num_bytes = read(pipe_fd, box_name, sizeof(box_name));
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(box_name, request + 1 + sizeof(client_named_pipe_path), sizeof(box_name));
 
     // remove the box
     int32_t return_code = remove_box_command(box_name);
@@ -941,7 +913,7 @@ int remove_box(int pipe_fd){
 
 }
 
-int list_boxes(int pipe_fd){
+int list_boxes(int pipe_fd, char* request){
     // Verify that the pipe is open
     if (pipe_fd < 0) {
         return -1;
@@ -949,11 +921,7 @@ int list_boxes(int pipe_fd){
     
     // parse the client pipe name
     char client_named_pipe_path[256];
-    ssize_t num_bytes;
-    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
-    if (num_bytes < 0) { // error
-        return -1;
-    }
+    memcpy(client_named_pipe_path, request + 1, sizeof(client_named_pipe_path));
 
     // send the list of boxes to the client
     if (list_boxes_command(client_named_pipe_path) < 0) {
@@ -976,11 +944,10 @@ int read_pipe_input(int pipe_fd){
     // data is available on the named pipe
     // read the data from the pipe
 
+    // threads will be enqueued in this function
 
-    // threads will be enqueue in this function
-
-    u_int8_t code;
-    ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+    char request[BOX_MESSAGE_SIZE];
+    ssize_t num_bytes = read(pipe_fd, request, sizeof(request));
     if (num_bytes == 0) {
         // num_bytes == 0 indicates EOF
         return 0;
@@ -989,20 +956,25 @@ int read_pipe_input(int pipe_fd){
         exit(EXIT_FAILURE);
     }
 
-    session_t* session = (session_t *)malloc(sizeof(session_t));
-    session->pipe_fd = (void *)malloc(sizeof(int));
-    session->op_code = (void *)malloc(sizeof(u_int8_t));
-    memcpy(session->pipe_fd, (void *)(int *) pipe_fd, sizeof(int));
-    memcpy(session->op_code, (void *)(u_int8_t*) code, sizeof(u_int8_t));
-
-    pcq_enqueue(pc_queue, &session);
-    
+    // create a session
     /*
+    session_t* session = (session_t *)malloc(sizeof(session_t));
+    memcpy(&session->pipe_fd, &pipe_fd, sizeof(pipe_fd));
+    memcpy(&session->op_code, &code, sizeof(code));
+    fprintf(stderr, "read_pipe_input: pipe_fd = %d, op_code = %d\n", session->pipe_fd, session->op_code);
+    if (pcq_enqueue(pc_queue, &session) < 0) {
+        return -1;
+    }
+    */
+    
+    // parse the op code
+    u_int8_t code;
+    memcpy(&code, request, sizeof(code));
     switch (code) {
         // register a publisher
         case OP_CODE_REGISTER_PUBLISHER:{
             fprintf(stderr, "read_pipe_input: OP_CODE_REGISTER_PUBLISHER received\n");
-            if (register_publisher(pipe_fd) < 0){
+            if (register_publisher(pipe_fd, request) < 0){
                 return -1;
             }
 
@@ -1011,7 +983,7 @@ int read_pipe_input(int pipe_fd){
         // register a subscriber
         case OP_CODE_REGISTER_SUBSCRIBER:{
             fprintf(stderr, "read_pipe_input: OP_CODE_REGISTER_SUBSCRIBER received\n");
-            if (register_subscriber(pipe_fd) < 0){
+            if (register_subscriber(pipe_fd, request) < 0){
                 return -1;
             }
             
@@ -1020,7 +992,7 @@ int read_pipe_input(int pipe_fd){
         // create a box
         case OP_CODE_REGISTER_BOX:{
             fprintf(stderr, "read_pipe_input: OP_CODE_REGISTER_BOX received\n");
-            if (register_box(pipe_fd) < 0){
+            if (register_box(pipe_fd, request) < 0){
                 return -1;
             }
             
@@ -1029,7 +1001,7 @@ int read_pipe_input(int pipe_fd){
         // remove a box
         case OP_CODE_REMOVE_BOX:{   
             fprintf(stderr, "read_pipe_input: OP_CODE_REMOVE_BOX received\n"); 
-            if (remove_box(pipe_fd) < 0){
+            if (remove_box(pipe_fd, request) < 0){
                 return -1;
             }
             
@@ -1038,7 +1010,7 @@ int read_pipe_input(int pipe_fd){
         // list boxes
         case OP_CODE_BOX_LIST:{
             fprintf(stderr, "read_pipe_input: OP_CODE_BOX_LIST received\n");
-            if (list_boxes(pipe_fd) < 0){
+            if (list_boxes(pipe_fd, request) < 0){
                 return -1;
             }
             
@@ -1049,7 +1021,6 @@ int read_pipe_input(int pipe_fd){
             return -1;
         }
     }
-    */
 
     return 0;
 }
@@ -1063,15 +1034,19 @@ void *session_thread() {
             exit(EXIT_FAILURE);
         }
 
-        u_int8_t code = (u_int8_t) data->op_code;
-        int pipe_fd = (int) pipe_fd;
+        char request[BOX_MESSAGE_SIZE];
+        memcpy(request, data->request, sizeof(request));
+        int pipe_fd = pipe_fd;
 
-        fprintf(stderr, "ENTERING SWITCH CASE with code: %d\n", code);
+        fprintf(stderr, "ENTERING SWITCH CASE with request: %s\n", request);
+        // parse the op code
+        u_int8_t code;
+        memcpy(&code, request, sizeof(code));
         switch (code) {
             // register a publisher
             case OP_CODE_REGISTER_PUBLISHER:{
                 fprintf(stderr, "session_thread: OP_CODE_REGISTER_PUBLISHER received\n");
-                if (register_publisher(pipe_fd) < 0){
+                if (register_publisher(pipe_fd, request) < 0){
                     fprintf(stderr, "session_thread failed: closing pipe\n");
                     INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
@@ -1081,7 +1056,7 @@ void *session_thread() {
             // register a subscriber
             case OP_CODE_REGISTER_SUBSCRIBER:{
                 fprintf(stderr, "session_thread: OP_CODE_REGISTER_SUBSCRIBER received\n");
-                if (register_subscriber(pipe_fd) < 0){
+                if (register_subscriber(pipe_fd, request) < 0){
                     fprintf(stderr, "session_thread failed: closing pipe\n");
                     INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
@@ -1091,7 +1066,7 @@ void *session_thread() {
             // create a box
             case OP_CODE_REGISTER_BOX:{
                 fprintf(stderr, "session_thread: OP_CODE_REGISTER_BOX received\n");
-                if (register_box(pipe_fd) < 0){
+                if (register_box(pipe_fd, request) < 0){
                     fprintf(stderr, "session_thread failed: closing pipe\n");
                     INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
@@ -1101,7 +1076,7 @@ void *session_thread() {
             // remove a box
             case OP_CODE_REMOVE_BOX:{    
                 fprintf(stderr, "session_thread: OP_CODE_REMOVE_BOX received\n");
-                if (remove_box(pipe_fd) < 0){
+                if (remove_box(pipe_fd, request) < 0){
                     fprintf(stderr, "session_thread failed: closing pipe\n");
                     INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
@@ -1111,7 +1086,7 @@ void *session_thread() {
             // list boxes
             case OP_CODE_BOX_LIST:{
                 fprintf(stderr, "session_thread: OP_CODE_BOX_LIST received\n");
-                if (list_boxes(pipe_fd) < 0){
+                if (list_boxes(pipe_fd, request) < 0){
                     fprintf(stderr, "session_thread failed: closing pipe\n");
                     INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
@@ -1119,7 +1094,7 @@ void *session_thread() {
                 break;
             }
             default:{                
-                fprintf(stderr, "[ERR]: Invalid command code: %d\n", code);
+                fprintf(stderr, "[ERR]: Invalid command request: %s\n", request);
                 break;
             }
         }
@@ -1143,13 +1118,18 @@ int init_mbroker(mbroker_t *mbroker_config) {
     }
 
     // initialize the session threads
+    /*
     thread_array = malloc(sizeof(pthread_t) * mbroker_config->max_sessions);   // array of threads
     for (int i = 0; i < mbroker_config->max_sessions; i++) {
         if (pthread_create(&thread_array[i], NULL, session_thread, NULL) < 0) {
             fprintf(stderr, "failed: could not create thread\n");
+            pcq_destroy(pc_queue);
+            free(pc_queue);
+            free(thread_array);
             exit(EXIT_FAILURE);
         }
     }
+    */
 
     // unlink register_pipe_name if it already exists
     if (unlink(mbroker_config->register_pipe_name) < 0 && errno != ENOENT) {
@@ -1179,13 +1159,21 @@ int close_mbroker(){
     }
 
     // join the session threads
+    /*
     for (int i = 0; i < mbroker->max_sessions; i++) {
         pthread_join(thread_array[i], NULL);
     }
+    */
 
     free(mbroker);
 
     return 0;
+}
+
+void sigint_handler(int signum) {
+    (void)signum;
+    stop = 1;
+    close_mbroker(EXIT_SUCCESS);
 }
 
 int check_args(char* register_pipe_name, size_t max_sessions){
@@ -1226,7 +1214,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    while (true) {
+    signal(SIGINT, sigint_handler); // register the SIGINT handler
+
+    while (!stop) {
         if (read_pipe_input(pipe_fd) < 0) {
             fprintf(stderr, "failed: could not read pipe input\n");
             return -1;

@@ -68,13 +68,13 @@ typedef struct box_list_t{
 
 // Structure to hold the state of the mbroker server
 typedef struct {
-    char* register_pipe_name;            // Path to the server's named pipe
+    char* register_pipe_name;               // Path to the server's named pipe
     size_t max_sessions;                    // Maximum number of concurrent sessions
 } mbroker_t;
 
 typedef struct {
-    void* op_code;
-    void* pipe_fd;
+    char request[MAX_MESSAGE_SIZE];
+    int pipe_fd;
 } session_t;
 
 #endif

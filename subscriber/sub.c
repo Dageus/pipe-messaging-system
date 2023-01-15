@@ -36,8 +36,8 @@ int read_pipe_input(int pipe_fd) {
     } else {
         // data is available on the named pipe
         // read the data from the pipe
-        u_int8_t code;
-        ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+        char answer[ANSWER_MESSAGE_SIZE];
+        ssize_t num_bytes = read(pipe_fd, answer, sizeof(answer));
         if (num_bytes == 0) {
             // num_bytes == 0 indicates EOF
             return 0;
@@ -47,19 +47,13 @@ int read_pipe_input(int pipe_fd) {
             exit(EXIT_FAILURE);
         }
 
+        // parse the op code
+        u_int8_t code;
+        memcpy(&code, answer, sizeof(u_int8_t));
         if (code == 10) {
             // parse the message
             char message[1024];
-            num_bytes = read(pipe_fd, message, sizeof(message));
-            if (num_bytes == 0) {
-                // num_bytes == 0 indicates EOF
-                fprintf(stderr, "[INFO]: pipe closed\n");
-                return 0;
-            } else if (num_bytes == -1) {
-                // num_bytes == -1 indicates error
-                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
+            memcpy(message, answer + sizeof(u_int8_t), 1024);
 
             subscriber_message(message);
             messages_received++;

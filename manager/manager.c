@@ -13,23 +13,18 @@
 #include <sys/select.h>
 
 
-int process_command(int pipe_fd, u_int8_t code) {
+int process_command(char* answer) {
     // read the message from the pipe
+    u_int8_t code;
+    memcpy(&code, answer, sizeof(code));
     switch (code)
     {
     case 4:{                        // response to creation of box
         int32_t return_code;
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, &return_code, sizeof(return_code));
-        if (num_bytes < 0) {        // error
-            return -1;
-        }
+        memcpy(&return_code, answer + sizeof(code), sizeof(return_code));
         if (return_code < 0) {     // box not removed
             char error_message[1024];
-            num_bytes = read(pipe_fd, error_message, sizeof(error_message));
-            if (num_bytes < 0) {    
-                return -1;
-            }
+            memcpy(error_message, answer + sizeof(code) + sizeof(return_code), sizeof(error_message));
             error_box_response(error_message);
         } else {
             succesful_box_response();
@@ -38,17 +33,10 @@ int process_command(int pipe_fd, u_int8_t code) {
     }
     case 6:{                        // responde to box removal
         int32_t return_code;
-        ssize_t num_bytes;
-        num_bytes = read(pipe_fd, &return_code, sizeof(return_code));
-        if (num_bytes < 0) {        // error
-            return -1;
-        }
+        memcpy(&return_code, answer + sizeof(code), sizeof(return_code));
         if (return_code < 0) {     // box not removed
             char error_message[1024];
-            num_bytes = read(pipe_fd, error_message, sizeof(error_message));
-            if (num_bytes < 0) {    
-                return -1;
-            }
+            memcpy(error_message, answer + sizeof(code) + sizeof(return_code), sizeof(error_message));
             error_box_response(error_message);
         } else {
             succesful_box_response();
@@ -56,53 +44,32 @@ int process_command(int pipe_fd, u_int8_t code) {
         break;
     }
     case 8:{                        // list boxes
+        // parse the last
         size_t last;
-        last = 0;
-        while (last == 0){          // make sure to check if its the last box or not
-            // parse the return code
-            ssize_t num_bytes;
-            num_bytes = read(pipe_fd, &last, sizeof(last));
-            if (num_bytes < 0) {    // error
-                return -1;
-            }
-            fprintf(stdout, "last: %zu\n", last);
-            // parse the box name
-            char box_name[32];
-            num_bytes = read(pipe_fd, box_name, sizeof(char) * 32);
-            if (num_bytes < 0) {    // error
-                return -1;
-            }
+        memcpy(&last, answer + sizeof(code), sizeof(last));
+        // parse the box name
+        char box_name[32];
+        memcpy(box_name, answer + sizeof(code) + sizeof(last), sizeof(box_name));
 
-            if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
-                last = 1;
-                no_boxes_found();
-                break;
-            }
-
-            size_t box_size;
-            num_bytes = read(pipe_fd, &box_size, sizeof(box_size));
-            if (num_bytes < 0) {    // error
-                return -1;
-            }
-
-            fprintf(stdout, "box_size: %zu\n", box_size);
-
-            // parse the numer of publishers
-            size_t n_publishers;
-            num_bytes = read(pipe_fd, &n_publishers, sizeof(n_publishers));
-            if (num_bytes < 0) {    // error
-                return -1;
-            }
-
-            // parse the number of subscribers
-            size_t n_subscribers;
-            num_bytes = read(pipe_fd, &n_subscribers, sizeof(n_subscribers));
-            if (num_bytes < 0) {    // error
-                return -1;
-            }
-
-            list_boxes_message(box_name, box_size, n_publishers, n_subscribers);
+        if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
+            no_boxes_found();
+            break;
         }
+
+        size_t box_size;
+        memcpy(&box_size, answer + sizeof(code) + sizeof(last) + sizeof(box_name), sizeof(box_size));
+
+        fprintf(stdout, "box_size: %zu\n", box_size);
+
+        // parse the numer of publishers
+        size_t n_publishers;
+        memcpy(&n_publishers, answer + sizeof(code) + sizeof(last) + sizeof(box_name) + sizeof(box_size), sizeof(n_publishers));
+
+        // parse the number of subscribers
+        size_t n_subscribers;
+        memcpy(&n_subscribers, answer + sizeof(code) + sizeof(last) + sizeof(box_name) + sizeof(box_size) + sizeof(n_publishers), sizeof(n_subscribers));
+
+        list_boxes_message(box_name, box_size, n_publishers, n_subscribers);
         break;
     }                         
     default:                // invalid command
@@ -118,8 +85,8 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
     }
     // data is available on the named pipe
     // read the data from the pipe
-    u_int8_t code;
-    ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
+    char answer[ANSWER_MESSAGE_SIZE];
+    ssize_t num_bytes = read(pipe_fd, answer, sizeof(answer));
     if (num_bytes == 0) {
         // num_bytes == 0 indicates EOF
         return 0;
@@ -129,7 +96,7 @@ int read_pipe_input(int pipe_fd, fd_set read_fds) {
         exit(EXIT_FAILURE);
     }
 
-    if (process_command(pipe_fd, code) < 0) {
+    if (process_command(answer) < 0) {
         return -1;
     }
     return 1;
