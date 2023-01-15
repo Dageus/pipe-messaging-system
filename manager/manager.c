@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <sys/select.h>
 
+
 int process_command(int pipe_fd, u_int8_t code) {
     // read the message from the pipe
     switch (code)
@@ -25,10 +26,11 @@ int process_command(int pipe_fd, u_int8_t code) {
         }
         if (return_code < 0) {     // box not created
             char error_message[1024];
-            num_bytes = read(pipe_fd, &error_message, sizeof(error_message));
+            num_bytes = read(pipe_fd, error_message, MAX_MESSAGE_SIZE);
             if (num_bytes < 0) {    // error
                 return -1;
             }
+            fprintf(stdout, "error message: %s\n", error_message);
             error_box_response(error_message);
         } else {
             succesful_box_response();
@@ -44,10 +46,11 @@ int process_command(int pipe_fd, u_int8_t code) {
         }
         if (return_code < 0) {     // box not removed
             char error_message[1024];
-            num_bytes = read(pipe_fd, &error_message, sizeof(error_message));
+            num_bytes = read(pipe_fd, error_message, sizeof(error_message));
             if (num_bytes < 0) {    
                 return -1;
             }
+            fprintf(stdout, "error message: %s\n", error_message);
             error_box_response(error_message);
         } else {
             succesful_box_response();
@@ -64,16 +67,19 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
+            fprintf(stdout, "last: %d\n", last);
             // parse the box name
             char box_name[32];
-            num_bytes = read(pipe_fd, &box_name, sizeof(box_name));
+            num_bytes = read(pipe_fd, box_name, sizeof(char) * 32);
             if (num_bytes < 0) {    // error
                 return -1;
             }
 
-            fprintf(stdout, "I got here 1 \n");
+            fprintf(stdout, "box_name: %s\n", box_name);
 
             if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
+                last = 1;
+                no_boxes_found();
                 break;
             }
 
@@ -82,6 +88,8 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
+
+            fprintf(stdout, "box_size: %ld\n", box_size);
 
             // parse the numer of publishers
             u_int64_t n_publishers;
@@ -95,13 +103,6 @@ int process_command(int pipe_fd, u_int8_t code) {
             num_bytes = read(pipe_fd, &n_subscribers, sizeof(n_subscribers));
             if (num_bytes < 0) {    // error
                 return -1;
-            }
-
-            fprintf(stdout, "I got here 2 \n");
-
-            if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
-                no_boxes_found();
-                break;
             }
 
             list_boxes_message(box_name, box_size, n_publishers, n_subscribers);

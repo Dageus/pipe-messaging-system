@@ -38,18 +38,14 @@ pthread_t *thread_array = NULL;
 // mutex to lock the box_list
 static pthread_mutex_t box_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-
-
 // array to keep track of the pipes
 
 box_t* get_box_by_publisher_pipe(char* publisher_pipe_name) {
     // lock the mutex
-
-    // IMPORTANT: this is not working
-    //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-    //    WARN("failed to lock mutex: %s", strerror(errno));
-    //    return NULL;
-    //} 
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return NULL;
+    } 
     
     // find the box that has the publisher pipe
     box_list_t* box_node = box_list;
@@ -66,10 +62,11 @@ box_t* get_box_by_publisher_pipe(char* publisher_pipe_name) {
 
 int box_in_list(char* box_name){
     // lock the mutex
-    //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-    //    WARN("failed to lock mutex: %s", strerror(errno));
-    //    return -1;
-    //} 
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    } 
+
     box_list_t* box_node = box_list;
     while (box_node != NULL) {
         if (strcmp(box_node->box->box_name, box_name) == 0) {
@@ -84,34 +81,32 @@ int box_in_list(char* box_name){
 
 
 char* create_message(u_int8_t code, char* message_to_write){
-    // lock the mutex
-    
-    //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-    //    WARN("failed to lock mutex: %s", strerror(errno));
-    //    return NULL;
-    //} 
-
     char *message = (char*) malloc(sizeof(char) * 1025);
     memcpy(message, &code, sizeof(u_int8_t));
     memcpy(message + 1, message_to_write, strlen(message_to_write));
     memset(message + 1 + strlen(message_to_write), '\0', 1024 - strlen(message_to_write));
-    //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
     return message;
 }
 
 
 int spread_message(char* message_to_write, char* publisher_pipe_name) {
     // lock the mutex
-    //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-    //    WARN("failed to lock mutex: %s", strerror(errno));
-    //    return -1;
-    //} 
+    fprintf(stderr, "[DEBUG]: Spreading message %s to box %s before lock\n", message_to_write, publisher_pipe_name);
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    } 
+
+    fprintf(stderr, "[DEBUG]: Spreading message %s to box %s after lock\n", message_to_write, publisher_pipe_name);
 
     // send the message to all the subscribers of the box
     // for each subscriber, send the message to the pipe
     box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
     if (box == NULL) {  // if the box does not exist
-        pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
 
@@ -121,7 +116,10 @@ int spread_message(char* message_to_write, char* publisher_pipe_name) {
         int pipe_fd = open(subscribers->subscriber->named_pipe, O_WRONLY);
         if (pipe_fd < 0) {
             fprintf(stderr, "[ERROR]: Could not open pipe %s with error %s\n", subscribers->subscriber->named_pipe, strerror(errno));
-            pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                WARN("failed to unlock mutex: %s", strerror(errno));
+                return -1;
+            }
             return -1;
         }
 
@@ -131,48 +129,74 @@ int spread_message(char* message_to_write, char* publisher_pipe_name) {
 
         num_bytes = write(pipe_fd, message, 1025);
         if (num_bytes < 0) {
-            pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                WARN("failed to unlock mutex: %s", strerror(errno));
+                return -1;
+            }
             return -1;
         }
         // get the next subscriber
         subscribers = subscribers->next;
     }
 
-    pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
     return 0;
 }
 
 
 box_t* find_box_by_name(char* box_name) {
+    // lock the mutex
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return NULL;
+    }
     //Find the box in the list
-    while (box_list != NULL){
-        if (strcmp(box_list->box->box_name, box_name) == 0) {
-            return box_list->box;
+    box_list_t* dummy_box_list = box_list;
+    while (dummy_box_list != NULL){
+        if (strcmp(dummy_box_list->box->box_name, box_name) == 0) {
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                WARN("failed to unlock mutex: %s", strerror(errno));
+                return NULL;
+            }
+            return dummy_box_list->box;
         }
-        box_list = box_list->next;
+        dummy_box_list = dummy_box_list->next;
+    }
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return NULL;
     }
     return NULL;
 }
 
 int get_old_messages(box_t* box, char* subscriber_pipe_name) {
     // lock the mutex
-    //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-    //    WARN("failed to lock mutex: %s", strerror(errno));
-    //    return -1;
-    //} 
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    } 
 
     // open the box using the box name and tfs
     int box_fd = tfs_open(box->box_name, TFS_O_APPEND);
 
     if (box_fd < 0) {
         fprintf(stderr, "[ERROR]: Could not open box %s\n", box->box_name);
-        //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
 
     if (tfs_rewind_offset(box_fd) < 0) {
         fprintf(stderr, "[ERROR]: Could not rewind offset for box %s\n", box->box_name);
-        //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
     
@@ -182,7 +206,10 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
     ssize_t num_bytes = tfs_read(box_fd, message, messages->message_size);
 
     if (num_bytes < 0) {
-        //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         fprintf(stderr, "[ERROR]: Could not read message from box %s: %s\n", box->box_name, strerror(errno));
         return -1;
     }
@@ -191,7 +218,10 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
         int pipe_fd = open(subscriber_pipe_name, O_WRONLY);
         if (pipe_fd < 0) {
             fprintf(stderr, "[ERROR]: Could not open pipe %s with error %s\n", subscriber_pipe_name, strerror(errno));
-            //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                WARN("failed to unlock mutex: %s", strerror(errno));
+                return -1;
+            }
             return -1;
         }
         u_int8_t code = OP_CODE_SUBSCRIBER_MESSAGE;
@@ -199,7 +229,10 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
         
         num_bytes = write(pipe_fd, message_to_send, 1025);
         if (num_bytes < 0) {
-            //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                WARN("failed to unlock mutex: %s", strerror(errno));
+                return -1;
+            }
             return -1;
         }
 
@@ -215,7 +248,10 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
         num_bytes = tfs_read(box_fd, message, messages->message_size);
     }
 
-    //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
 
     return 0;
 }
@@ -223,38 +259,81 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
 char* create_answer(u_int8_t code, int32_t return_code, char* error_message, unsigned int size_of_answer){
     char *answer = (char*) malloc(sizeof(char) * size_of_answer); 
     memcpy(answer, &code, sizeof(u_int8_t));
-    memcpy(answer + 1, &return_code, sizeof(int32_t));
+    memcpy(answer + sizeof(u_int8_t), &return_code, sizeof(int32_t));
     if (return_code < 0){
-        memcpy(answer + 1 + 4, error_message, strlen(error_message));
-        memset(answer + 1 + 4 + strlen(error_message), '\0', sizeof(char) * (1024 - strlen(error_message)));
+        memcpy(answer + sizeof(u_int8_t) + sizeof(int32_t), error_message, strlen(error_message));
+        memset(answer + sizeof(u_int8_t) + sizeof(int32_t) + strlen(error_message), '\0', sizeof(char) * (1024 - strlen(error_message)));
+        INFO("Answer created: %s", answer);
         return answer;
     }
-    memset(answer + 4 + 1, '\0', sizeof(char) * 1024);
+    memset(answer + sizeof(int32_t) + sizeof(u_int8_t), '\0', sizeof(char) * 1024);
     return answer;
 }
 
-
-int create_box_command(char* box_name){
+int32_t create_box_command(char* box_name){
+    // lock the mutex
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    }
     // Verify if the box already exists
     if (find_box_by_name(box_name) != NULL){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
 
     // Create the box
     int box_fd = tfs_open(box_name, TFS_O_CREAT);
     if (box_fd < 0){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
 
     // Add the box to the list
-    box_list_t* box_node = new_node(box_name);
-    box_node->next = box_list;
-    box_list = box_node;
+    box_t* box = (box_t*) malloc(sizeof(box_t));
+    box->box_name = (char*) malloc(sizeof(char) * 32);
+    strcpy(box->box_name, box_name);
+    box->publisher_named_pipe = NULL;
+    box->subscribers = NULL;
+    box->num_subscribers = 0;
+    box->messages_size = NULL;
+    if (box_list == NULL){
+        fprintf(stdout, "FIRST BOX\n");
+        box_list = (box_list_t*) malloc(sizeof(box_list_t));
+        box_list->box = box;
+        box_list->next = NULL;
+    } else {
+        fprintf(stdout, "FIRST BOX NAME IN LIST: %s\n", box_list->box->box_name);
+        box_list_t* box_node = box_list;
+        while (box_node->next != NULL){
+            box_node = box_node->next;
+        }
+        box_list_t* new_box_node = (box_list_t*) malloc(sizeof(box_list_t));
+        new_box_node->box = box;
+        new_box_node->next = NULL;
+        box_node->next = new_box_node;
+    }
 
+    // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
     return 0;
 }
 
 int remove_box_command(char* box_name) {
+    // lock the mutex
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    }
     // find the box
     box_list_t* box_node = box_list;
     box_list_t* prev_box_node = NULL;
@@ -266,6 +345,10 @@ int remove_box_command(char* box_name) {
         box_node = box_node->next;
     }
     if (box_node == NULL) {
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
 
@@ -281,18 +364,38 @@ int remove_box_command(char* box_name) {
     free(box_node->box);
     free(box_node);
 
+    // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
     return 0;
 }
 
 int register_publisher_command(char* client_named_pipe_path, char* box_name) {
+    // lock the mutex
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    }
     // Find box in the list
     box_t* box = find_box_by_name(box_name);
-    if (box == NULL)
+    if (box == NULL){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
+    }
 
     // Verify if the box already has a publisher
-    if (box->publisher_named_pipe != NULL)
+    if (box->publisher_named_pipe != NULL){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
+    }
 
     // Create the publisher
     publisher_t* publisher = malloc(sizeof(publisher_t));
@@ -302,30 +405,61 @@ int register_publisher_command(char* client_named_pipe_path, char* box_name) {
     // Add the publisher to the box
     box->publisher_named_pipe = client_named_pipe_path;
 
+    // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
     return 0;
 }
 
 int remove_publisher_command(char* client_named_pipe_path, char* box_name) {
+    // lock the mutex
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    }
     // Find box in the list
     box_t* box = find_box_by_name(box_name);
-    if (box == NULL)
+    if (box == NULL){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
+    }
 
     // Verify if the publisher is the one we want to remove
     if (strcmp(box->publisher_named_pipe, client_named_pipe_path) != 0){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
+            return -1;
+        }
         return -1;
     }
 
     // Remove the publisher
     box->publisher_named_pipe = NULL;
 
+    // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
     return 0;
 }
 
 int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
+    // lock the box
+    if (pthread_mutex_lock(&box_list_mutex) == -1){
+        return -1;
+    }
     // Find box in the list
     box_t* box = find_box_by_name(box_name);
     if (box == NULL){
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
         return -1;
     }
 
@@ -345,6 +479,9 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
     }
 
     if (get_old_messages(box, client_named_pipe_path) < 0) {
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
         return -1;
     }
 
@@ -353,46 +490,73 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
 
 char* create_listing_message(box_list_t* box_node) {
     // create the message
-    char *message = (char*) malloc(sizeof(char) * 56); // 1 + 1 + 32 + 8 + 8 + 8 = 56 bytes
-    long unsigned int current_index = 0;
+    char *message = (char*) malloc(sizeof(char) * 58); // 1 + 1 + 32 + 8 + 8 + 8 = 56 bytes
 
     // code
     u_int8_t code = OP_CODE_ANSWER_TO_LIST;
-    memcpy(message, &code, sizeof(code));
-    current_index += sizeof(code);
+    memcpy(message, &code, sizeof(u_int8_t));
     
     // last
     u_int8_t last = 0;
     if (box_node->next == NULL) {
         last = 1;
     }
-    memcpy(message + current_index, &last, sizeof(last));
-    current_index += sizeof(last);
+    memcpy(message + 1, &last, sizeof(u_int8_t));
     
     // box_name
     char box_name[32];
     strcpy(box_name, box_node->box->box_name);
-    memcpy(message + current_index, box_name, sizeof(box_name));
-    current_index += sizeof(box_node->box->box_name);
+    memcpy(message + 1 + 1, box_name, strlen(box_name));
+    memset(message + 1 + 1 + strlen(box_name), '\0', 32 - strlen(box_name));
+    fprintf(stderr, "box_name: %s\n", box_name);
 
     // box_size
     u_int64_t box_size = sizeof(box_node->box);
-    memcpy(message + current_index, &box_size, sizeof(box_size));
-    current_index += sizeof(box_size);
+    memcpy(message + 1 + 1 + 32, &box_size, sizeof(u_int64_t));
 
     // n_publishers
     u_int64_t n_publishers = 0;
     if (box_node->box->publisher_named_pipe != NULL) {
         n_publishers = 1;
     }
-    memcpy(message + current_index, &n_publishers, sizeof(n_publishers));
-    current_index += sizeof(n_publishers);
-
+    memcpy(message + 1 + 1 + 32 + 8, &n_publishers, sizeof(u_int64_t));
     // n_subscribers
-    u_int64_t n_subscribers = box_node->box->num_subscribers;
-    memcpy(message + current_index, &n_subscribers, sizeof(n_subscribers));
+    u_int64_t n_subscribers = 0;
+    memcpy(message + 1 + 1 + 32 + 8 + 8, &n_subscribers, sizeof(u_int64_t));
 
     return message;
+}
+
+char* create_listing_error_message(){
+    size_t message_size = sizeof(u_int8_t) + sizeof(u_int8_t) + (sizeof(char) * 32) + sizeof(u_int64_t) + sizeof(u_int64_t) + sizeof(u_int64_t) + sizeof(u_int64_t);
+    char *message = (char*) malloc(sizeof(char) * message_size); // 1 + 1 + 32 + 8 + 8 + 8 = 56 bytes
+
+    // code
+    u_int8_t code = OP_CODE_ANSWER_TO_LIST;
+    memcpy(message, &code, sizeof(u_int8_t));
+    
+    // last
+    u_int8_t last = 1;
+    memcpy(message + sizeof(u_int8_t), &last, sizeof(u_int8_t));
+    
+    // box_name
+    char box_name[32] = "";
+    memcpy(message + sizeof(u_int8_t) + sizeof(u_int8_t), box_name, strlen(box_name));
+    memset(message + sizeof(u_int8_t) + sizeof(u_int8_t) + strlen(box_name), '\0', 32 - strlen(box_name));
+
+    // box_size
+    u_int64_t box_size = 0;
+    memcpy(message + sizeof(u_int8_t) + sizeof(u_int8_t) + 32, &box_size, sizeof(u_int64_t));
+
+    // n_publishers
+    u_int64_t n_publishers = 0;
+    memcpy(message + sizeof(u_int8_t) + sizeof(u_int8_t) + 32 + sizeof(u_int64_t), &n_publishers, sizeof(u_int64_t));
+
+    // n_subscribers
+    u_int64_t n_subscribers = 0;
+    memcpy(message + sizeof(u_int8_t) + sizeof(u_int8_t) + 32 + sizeof(u_int64_t) + sizeof(u_int64_t), &n_subscribers, sizeof(u_int64_t));
+
+    return message;    
 }
 
 int list_boxes_command(char* manager_pipe_name){
@@ -406,22 +570,64 @@ int list_boxes_command(char* manager_pipe_name){
     }
 
     // iterate through the boxes and creat a message for each box
+    // lock the box list
+    if (pthread_mutex_lock(&box_list_mutex) == -1){
+        return -1;
+    }
     box_list_t* box_node = box_list;
-    while (box_node != NULL) {
-        char* message = create_listing_message(box_node);
+    if (box_node == NULL) {
+        fprintf(stderr, "failed: no boxes to list\n");
+        char* message = create_listing_error_message();
         if (write(pipe_fd, message, sizeof(message)) < 0) {
             fprintf(stderr, "failed: could not write to pipe: %s\n", manager_pipe_name);
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){
+                return -1;
+            }
             return -1;
         }
-        box_node = box_node->next;
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
+        return 0;
     }
+
+    char* message = create_listing_message(box_node);
+    if (write(pipe_fd, message, sizeof(message)) < 0) {
+        fprintf(stderr, "failed: could not write to pipe: %s\n", manager_pipe_name);
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
+        return -1;
+    }
+
+    while (box_node->next != NULL) {
+        box_node = box_node->next;
+        fprintf(stderr, "success: found next box: %s\n", box_node->box->box_name);
+        message = create_listing_message(box_node);
+        if (write(pipe_fd, message, sizeof(message)) < 0) {
+            fprintf(stderr, "failed: could not write to pipe: %s\n", manager_pipe_name);
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){
+                return -1;
+            }
+            return -1;
+        }
+    }
+
+    fprintf(stderr, "success: wrote all boxes to pipe: %s\n", manager_pipe_name);
 
     // close the pipe
     if (close(pipe_fd) == -1) {
         fprintf(stderr, "failed: could not close pipe: %s\n", manager_pipe_name);
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
         return -1;
     }
 
+    // unlock the box list
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){
+        return -1;
+    }
     return 0;
 }
 
@@ -443,8 +649,16 @@ int write_to_box(char* box_name, char* message, size_t message_size){
         return -1;
     }
 
+    // lock the box list
+    if (pthread_mutex_lock(&box_list_mutex) == -1){
+        return -1;
+    }
     box_t *box = find_box_by_name(box_name);
     if (box == NULL) {
+        fprintf(stderr, "failed: could not find box: %s\n", box_name);
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
         return -1;
     }
     
@@ -467,6 +681,10 @@ int write_to_box(char* box_name, char* message, size_t message_size){
         message_size_node->next = new_message_node;
     }
     
+    // unlock the box list
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){
+        return -1;
+    }
     return 0;
 }
 
@@ -483,10 +701,7 @@ int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box
     // data is available on the named pipe
     // read the data from the pipe
 
-    //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-    //    WARN("failed to lock mutex: %s", strerror(errno));
-    //    return -1;
-    //}   
+    fprintf(stderr, "success: data is available on the named pipe\n");
 
     u_int8_t code;
     ssize_t num_bytes;
@@ -494,12 +709,11 @@ int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box
     num_bytes = read(pipe_fd, &code, sizeof(code));
     if (num_bytes == 0) {
         // num_bytes == 0 indicates EOF
-        pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex
+        fprintf(stderr, "[INFO]: read EOF from pipe: %s\n", publisher_named_pipe);
         return 1;
     } else if (num_bytes == -1) {
         // num_bytes == -1 indicates error
         fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-        pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex
         exit(EXIT_FAILURE);
     }
 
@@ -507,19 +721,20 @@ int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box
         char message[1024];
         num_bytes = read(pipe_fd, message, sizeof(message));
         if (num_bytes < 0) { // error
-            pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex
             return -1;
         }
+
+        fprintf(stderr, "success: read message from pipe: %s\n", publisher_named_pipe);
 
         // write to the box
         if (write_to_box(box_name, message, strlen(message)) < 0) {
-            pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex
             return -1;
         }
 
+        fprintf(stderr, "success: wrote message to box: %s\n", box_name);
+
         // send the message to all the subscribers of the box
         if (spread_message(message, publisher_named_pipe) < 0) {
-            pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex
             return -1;
         }
     }
@@ -536,24 +751,14 @@ int listen_to_publisher(char* publisher_named_pipe, char* box_name){
     }
 
     while(true){
-        // lock the mutex
-
-        //if (pthread_mutex_lock(&box_list_mutex) == -1) {
-        //    WARN("failed to lock mutex: %s", strerror(errno));
-        //    return -1;
-        //}   
-
-        // read the message from the pipe
-        // send the message to the subscribers
         int ret = read_publisher_pipe_input(pipe_fd, publisher_named_pipe, box_name);
         if (ret < 0) {
-            //pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex
             return -1;
         } else if (ret == 1){
+            fprintf(stderr, "publisher disconnected: %s\n", publisher_named_pipe);
             break;
         }
     }
-    //pthread_mutex_unlock(&box_list_mutex); // unlock the mutex
     return 0;
 }
 
@@ -651,10 +856,9 @@ int register_box(int pipe_fd){
     // create the box
     int32_t return_code = create_box_command(box_name);
     u_int8_t op_code = OP_CODE_ANSWER_TO_CREATION;
-    char *answer = create_answer(op_code, return_code, "failed: could not register box", ANSWER_MESSAGE_SIZE);
-    if (return_code < 0) {
-        return -1;
-    }
+    char *error_message = "failed: could not register box";
+    char *answer = create_answer(op_code, return_code, error_message, ANSWER_MESSAGE_SIZE);
+    fprintf(stderr, "answer: %s\n", answer);
 
     // open client pipe
     int client_pipe_fd = open(client_named_pipe_path, O_WRONLY);
@@ -762,7 +966,6 @@ int read_pipe_input(int pipe_fd){
 
     // threads will be enqueue in this function
 
-
     u_int8_t code;
     ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
     if (num_bytes == 0) {
@@ -835,6 +1038,7 @@ int read_pipe_input(int pipe_fd){
 }
 
 void *session_thread() {
+    fprintf(stderr, "session_thread: started\n");
     while (true) {
         session_t* data = (session_t *)pcq_dequeue(pc_queue);
         if (data == NULL) {

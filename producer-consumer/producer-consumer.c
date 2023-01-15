@@ -81,6 +81,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     if (pthread_mutex_lock(&queue->pcq_tail_lock) != 0) {
         return -1;
     }
+    fprintf(stderr, "enqueued\n");
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail = queue->pcq_tail + 1;
     if (pthread_mutex_unlock(&queue->pcq_tail_lock) != 0) {
