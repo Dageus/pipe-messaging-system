@@ -1074,7 +1074,7 @@ int init_mbroker(mbroker_t *mbroker_config) {
     }
 
     // create the named pipe
-    if (mkfifo(mbroker_config->register_pipe_name, 0666) < 0) {
+    if (mkfifo(mbroker_config->register_pipe_name, 0640) < 0) {
         fprintf(stderr, "failed: could not create named pipe\n");
         return -1;
     }

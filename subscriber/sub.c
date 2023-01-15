@@ -157,8 +157,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-
-    if (mkfifo(pipe_name, 0666) < 0) {
+    if (mkfifo(pipe_name, 0640) < 0) {
         fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
         return -1;
     }

@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    if (mkfifo(pipe_name, 0666) < 0) {
+    if (mkfifo(pipe_name, 0640) < 0) {
         fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
         exit(EXIT_FAILURE);
     } else {
