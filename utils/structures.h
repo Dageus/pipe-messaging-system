@@ -73,8 +73,8 @@ typedef struct {
 } mbroker_t;
 
 typedef struct {
-    u_int8_t op_code;
-    int pipe_fd;
+    void* op_code;
+    void* pipe_fd;
 } session_t;
 
 #endif

@@ -1,4 +1,6 @@
 #include "producer-consumer.h"
+#include "structures.h"
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -31,13 +33,13 @@ int pcq_create(pc_queue_t *queue, size_t capacity) {
     if (queue->pcq_buffer == NULL) {
         return -1;
     }
-    queue->pcq_current_size_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
-    queue->pcq_head_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
-    queue->pcq_tail_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
-    queue->pcq_pusher_condvar_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
-    queue->pcq_popper_condvar_lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
-    queue->pcq_pusher_condvar = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
-    queue->pcq_popper_condvar = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
+    pthread_mutex_init(&queue->pcq_current_size_lock, NULL);
+    pthread_mutex_init(&queue->pcq_head_lock, NULL);
+    pthread_mutex_init(&queue->pcq_tail_lock, NULL);
+    pthread_mutex_init(&queue->pcq_pusher_condvar_lock, NULL);
+    pthread_mutex_init(&queue->pcq_popper_condvar_lock, NULL);
+    pthread_cond_init(&queue->pcq_pusher_condvar, NULL);
+    pthread_cond_init(&queue->pcq_popper_condvar, NULL);
     return 0;
 
 }
@@ -81,29 +83,29 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     if (pthread_mutex_lock(&queue->pcq_tail_lock) != 0) {
         return -1;
     }
-    fprintf(stderr, "enqueued\n");
+    session_t *session = (session_t*) elem;
+    printf("Enqueueing session %d, op_code: %d\n", session->pipe_fd, session->op_code);
     queue->pcq_buffer[queue->pcq_tail] = elem;
-    queue->pcq_tail = queue->pcq_tail + 1;
-    if (pthread_mutex_unlock(&queue->pcq_tail_lock) != 0) {
-        return -1;
-    }
-
-    // broadcast/signal to the popper that he can pop
-    if (pthread_mutex_lock(&queue->pcq_pusher_condvar_lock) != 0) {
-        return -1;
-    }
-    if (pthread_cond_signal(&queue->pcq_pusher_condvar) != 0) {
-        return -1;
-    }
-    if (pthread_mutex_unlock(&queue->pcq_pusher_condvar_lock) != 0) {
-        return -1;
-    }
-
+    queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
     if (pthread_mutex_lock(&queue->pcq_current_size_lock) != 0) {
         return -1;
     }
     queue->pcq_current_size++;
     if (pthread_mutex_unlock(&queue->pcq_current_size_lock) != 0) {
+        return -1;
+    }
+    if (pthread_mutex_unlock(&queue->pcq_tail_lock) != 0) {
+        return -1;
+    }
+
+    if (pthread_mutex_lock(&queue->pcq_popper_condvar_lock) != 0) {
+        return -1;
+    }
+    // broadcast/signal to the popper that he can po
+    if (pthread_cond_signal(&queue->pcq_popper_condvar) != 0) {
+        return -1;
+    }
+    if (pthread_mutex_unlock(&queue->pcq_popper_condvar_lock) != 0) {
         return -1;
     }
     return 0;
@@ -117,11 +119,11 @@ void *pcq_dequeue(pc_queue_t *queue) {
     }
     
     while (queue->pcq_current_size == 0) {
+        fprintf(stderr, "DEQUEUE WAITING...\n");
         if (pthread_cond_wait(&queue->pcq_popper_condvar, &queue->pcq_popper_condvar_lock) != 0) {
             return NULL;
         }
     }
-
     if (pthread_mutex_unlock(&queue->pcq_popper_condvar_lock) != 0){
         return NULL;
     }
@@ -132,24 +134,25 @@ void *pcq_dequeue(pc_queue_t *queue) {
     }
     void* elem = queue->pcq_buffer[queue->pcq_head];
     queue->pcq_head = queue->pcq_head + 1;
-    pthread_mutex_unlock(&queue->pcq_head_lock);
-
-    // broadcast/signal to the pusher that he can push
-    if (pthread_mutex_lock(&queue->pcq_popper_condvar_lock) != 0){
-        return NULL;
-    }
-    if (pthread_cond_signal(&queue->pcq_popper_condvar) != 0){
-        return NULL;
-    }
-    if (pthread_mutex_unlock(&queue->pcq_popper_condvar_lock) != 0){
-        return NULL;
-    }
-
     if (pthread_mutex_lock(&queue->pcq_current_size_lock) != 0){
         return NULL;
     }
     queue->pcq_current_size--;
     if (pthread_mutex_unlock(&queue->pcq_current_size_lock) != 0){
+        return NULL;
+    }
+
+    if (pthread_mutex_unlock(&queue->pcq_head_lock) != 0){
+        return NULL;
+    }
+    if (pthread_mutex_lock(&queue->pcq_pusher_condvar_lock) != 0){
+        return NULL;
+    }
+    // broadcast/signal to the pusher that he can push
+    if (pthread_cond_signal(&queue->pcq_pusher_condvar) != 0){
+        return NULL;
+    }
+    if (pthread_mutex_unlock(&queue->pcq_pusher_condvar_lock) != 0){
         return NULL;
     }
     return elem;

@@ -151,9 +151,7 @@ int32_t create_box_command(char* box_name){
     box->subscribers = NULL;
     box->num_subscribers = 0;
     box->messages_size = NULL;
-
-    //IMPORTANT: initialize the mutex and the condition variable
-
+    // Initialize the condition variable
     if (pthread_cond_init(&box->box_cond, NULL) == -1){
         WARN("failed to initialize condition variable: %s", strerror(errno));
         return -1;
@@ -258,6 +256,8 @@ int remove_subscriber_from_box(box_t* box, char* client_named_pipe_path) {
     // free the memory
     free(subscriber_list->subscriber->named_pipe);
     free(subscriber_list->subscriber);
+
+    box->num_subscribers--;
 
     // unlock the mutex
     if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
@@ -372,6 +372,7 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         new_subscriber_node->subscriber = subscriber;
         new_subscriber_node->next = box->subscribers;
     }
+    box->num_subscribers++;
 
     // open the box
     int box_fd = tfs_open(box->box_name, TFS_O_APPEND);
@@ -531,7 +532,7 @@ char* create_listing_message(box_list_t* box_node) {
     }
     memcpy(message + 1 + 1 + 32 + 8, &n_publishers, sizeof(u_int64_t));
     // n_subscribers
-    u_int64_t n_subscribers = 0;
+    u_int64_t n_subscribers = box_node->box->num_subscribers;
     memcpy(message + 1 + 1 + 32 + 8 + 8, &n_subscribers, sizeof(u_int64_t));
 
     return message;
@@ -989,11 +990,14 @@ int read_pipe_input(int pipe_fd){
     }
 
     session_t* session = (session_t *)malloc(sizeof(session_t));
-    session->pipe_fd = pipe_fd;
-    session->op_code = code;
+    session->pipe_fd = (void *)malloc(sizeof(int));
+    session->op_code = (void *)malloc(sizeof(u_int8_t));
+    memcpy(session->pipe_fd, (void *)(int *) pipe_fd, sizeof(int));
+    memcpy(session->op_code, (void *)(u_int8_t*) code, sizeof(u_int8_t));
 
-    //pcq_enqueue(pc_queue, &session);
+    pcq_enqueue(pc_queue, &session);
     
+    /*
     switch (code) {
         // register a publisher
         case OP_CODE_REGISTER_PUBLISHER:{
@@ -1045,6 +1049,7 @@ int read_pipe_input(int pipe_fd){
             return -1;
         }
     }
+    */
 
     return 0;
 }
@@ -1058,54 +1063,66 @@ void *session_thread() {
             exit(EXIT_FAILURE);
         }
 
-        /*
-        switch (data->op_code) {
+        u_int8_t code = (u_int8_t) data->op_code;
+        int pipe_fd = (int) pipe_fd;
+
+        fprintf(stderr, "ENTERING SWITCH CASE with code: %d\n", code);
+        switch (code) {
             // register a publisher
             case OP_CODE_REGISTER_PUBLISHER:{
-                if (register_publisher(data->pipe_fd) < 0){
-                    return -1;
+                fprintf(stderr, "session_thread: OP_CODE_REGISTER_PUBLISHER received\n");
+                if (register_publisher(pipe_fd) < 0){
+                    fprintf(stderr, "session_thread failed: closing pipe\n");
+                    INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
 
                 break;
             }
             // register a subscriber
             case OP_CODE_REGISTER_SUBSCRIBER:{
-                if (register_subscriber(data->pipe_fd) < 0){
-                    return -1;
+                fprintf(stderr, "session_thread: OP_CODE_REGISTER_SUBSCRIBER received\n");
+                if (register_subscriber(pipe_fd) < 0){
+                    fprintf(stderr, "session_thread failed: closing pipe\n");
+                    INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
                 
                 break;
             }
             // create a box
             case OP_CODE_REGISTER_BOX:{
-                if (register_box(data->pipe_fd) < 0){
-                    return -1;
+                fprintf(stderr, "session_thread: OP_CODE_REGISTER_BOX received\n");
+                if (register_box(pipe_fd) < 0){
+                    fprintf(stderr, "session_thread failed: closing pipe\n");
+                    INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
                 
                 break;
             }
             // remove a box
             case OP_CODE_REMOVE_BOX:{    
-                if (remove_box(data->pipe_fd) < 0){
-                    return -1;
+                fprintf(stderr, "session_thread: OP_CODE_REMOVE_BOX received\n");
+                if (remove_box(pipe_fd) < 0){
+                    fprintf(stderr, "session_thread failed: closing pipe\n");
+                    INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
                 
                 break;
             }
             // list boxes
             case OP_CODE_BOX_LIST:{
-                if (list_boxes(data->pipe_fd) < 0){
-                    return -1;
+                fprintf(stderr, "session_thread: OP_CODE_BOX_LIST received\n");
+                if (list_boxes(pipe_fd) < 0){
+                    fprintf(stderr, "session_thread failed: closing pipe\n");
+                    INFO("NO APPROPRIATE CASE DEFINED FOR FAILURE");
                 }
                 
                 break;
             }
             default:{                
-                fprintf(stderr, "[ERR]: Invalid command code: %d\n", data->op_code);
-                return -1;
+                fprintf(stderr, "[ERR]: Invalid command code: %d\n", code);
+                break;
             }
         }
-        */
     }
     return NULL;
 }
@@ -1128,10 +1145,10 @@ int init_mbroker(mbroker_t *mbroker_config) {
     // initialize the session threads
     thread_array = malloc(sizeof(pthread_t) * mbroker_config->max_sessions);   // array of threads
     for (int i = 0; i < mbroker_config->max_sessions; i++) {
-        //if (pthread_create(&thread_array[i], NULL, session_thread, NULL) < 0) {
-        //    fprintf(stderr, "failed: could not create thread\n");
-        //    exit(EXIT_FAILURE);
-        //}
+        if (pthread_create(&thread_array[i], NULL, session_thread, NULL) < 0) {
+            fprintf(stderr, "failed: could not create thread\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     // unlink register_pipe_name if it already exists
