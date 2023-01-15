@@ -90,40 +90,6 @@ char* create_message(u_int8_t code, char* message_to_write){
     return message;
 }
 
-
-int spread_message(char* message_to_write, char* publisher_pipe_name) {
-    // send the message to all the subscribers of the box
-    // for each subscriber, send the message to the pipe
-    box_t* box = get_box_by_publisher_pipe(publisher_pipe_name);
-    fprintf(stderr, "[DEUBG]: got box\n");
-    if (box == NULL) {  // if the box does not exist
-        return -1;
-    }
-
-    // iterate through the subscribers and send message to their pipes
-    subscriber_list_t* subscribers = box->subscribers;
-    while (subscribers != NULL) {
-        int pipe_fd = open(subscribers->subscriber->named_pipe, O_WRONLY);
-        if (pipe_fd < 0) {
-            fprintf(stderr, "[ERROR]: Could not open pipe %s with error %s\n", subscribers->subscriber->named_pipe, strerror(errno));
-            return -1;
-        }
-
-        u_int8_t code = OP_CODE_SUBSCRIBER_MESSAGE;
-        char* message = create_message(code, message_to_write);
-        ssize_t num_bytes;
-
-        num_bytes = write(pipe_fd, message, 1025);
-        if (num_bytes < 0) {
-            return -1;
-        }
-        // get the next subscriber
-        subscribers = subscribers->next;
-    }
-    return 0;
-}
-
-
 box_t* find_box_by_name(char* box_name) {
     //Find the box in the list
     box_list_t* dummy_box_list = box_list;
@@ -134,65 +100,6 @@ box_t* find_box_by_name(char* box_name) {
         dummy_box_list = dummy_box_list->next;
     }
     return NULL;
-}
-
-int get_old_messages(box_t* box, char* subscriber_pipe_name) {
-    // lock the mutex
-
-    // open the box using the box name and tfs
-    int box_fd = tfs_open(box->box_name, TFS_O_APPEND);
-
-    if (box_fd < 0) {
-        fprintf(stderr, "[ERROR]: Could not open box %s\n", box->box_name);
-        return -1;
-    }
-
-    if (tfs_rewind_offset(box_fd) < 0) {
-        fprintf(stderr, "[ERROR]: Could not rewind offset for box %s\n", box->box_name);
-        return -1;
-    }
-    
-    // read the messages from the box
-    message_list_t* messages = box->messages_size;
-    char* message = (char*) malloc(sizeof(char) * MAX_MESSAGE_SIZE);
-    ssize_t num_bytes = tfs_read(box_fd, message, messages->message_size);
-
-    if (num_bytes < 0) {
-        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
-            WARN("failed to unlock mutex: %s", strerror(errno));
-            return -1;
-        }
-        fprintf(stderr, "[ERROR]: Could not read message from box %s: %s\n", box->box_name, strerror(errno));
-        return -1;
-    }
-    while (true) {
-        // send the message to the subscriber
-        int pipe_fd = open(subscriber_pipe_name, O_WRONLY);
-        if (pipe_fd < 0) {
-            fprintf(stderr, "[ERROR]: Could not open pipe %s with error %s\n", subscriber_pipe_name, strerror(errno));
-            return -1;
-        }
-        u_int8_t code = OP_CODE_SUBSCRIBER_MESSAGE;
-        char* message_to_send = create_message(code, message);
-        
-        num_bytes = write(pipe_fd, message_to_send, 1025);
-        if (num_bytes < 0) {
-            return -1;
-        }
-
-        if (messages->next == NULL) {
-            break;
-        }
-
-        // get the next message size
-        messages = messages->next;
-
-        memset(message, 0, sizeof(char) * MAX_MESSAGE_SIZE);
-        
-        num_bytes = tfs_read(box_fd, message, messages->message_size);
-    }
-
-    return 0;
 }
 
 char* create_answer(u_int8_t code, int32_t return_code, char* error_message, unsigned int size_of_answer){
@@ -244,6 +151,14 @@ int32_t create_box_command(char* box_name){
     box->subscribers = NULL;
     box->num_subscribers = 0;
     box->messages_size = NULL;
+
+    //IMPORTANT: initialize the mutex and the condition variable
+
+    if (pthread_cond_init(&box->box_cond, NULL) == -1){
+        WARN("failed to initialize condition variable: %s", strerror(errno));
+        return -1;
+    }
+
     if (box_list == NULL){
         fprintf(stdout, "FIRST BOX\n");
         box_list = (box_list_t*) malloc(sizeof(box_list_t));
@@ -304,6 +219,45 @@ int remove_box_command(char* box_name) {
     free(box_node->box->box_name);
     free(box_node->box);
     free(box_node);
+
+    // unlock the mutex
+    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+        WARN("failed to unlock mutex: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+int remove_subscriber_from_box(box_t* box, char* client_named_pipe_path) {
+    // lock the mutex
+    if (pthread_mutex_lock(&box_list_mutex) == -1) {
+        WARN("failed to lock mutex: %s", strerror(errno));
+        return -1;
+    }
+
+    // find the subscriber
+    subscriber_list_t* subscriber_list = subscriber_list;
+    subscriber_list_t* prev_subscriber_list = NULL;
+
+    while (subscriber_list->next != NULL) {
+        if (strcmp(subscriber_list->subscriber->named_pipe, client_named_pipe_path) == 0) {
+            // we found the subscriber
+            break;
+        }
+        prev_subscriber_list = subscriber_list;
+        subscriber_list = subscriber_list->next;
+    }
+
+    // remove the subscriber from the list
+    if (prev_subscriber_list == NULL) {
+        box->subscribers = subscriber_list->next;
+    } else {
+        prev_subscriber_list->next = subscriber_list->next;
+    }
+
+    // free the memory
+    free(subscriber_list->subscriber->named_pipe);
+    free(subscriber_list->subscriber);
 
     // unlock the mutex
     if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
@@ -394,6 +348,7 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
     if (pthread_mutex_lock(&box_list_mutex) == -1){
         return -1;
     }
+
     // Find box in the list
     box_t* box = find_box_by_name(box_name);
     if (box == NULL){
@@ -402,8 +357,6 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         }
         return -1;
     }
-    
-    fprintf(stdout, "BOX NAME: %s\n", box->box_name);
 
     // add the subscriber to the box
     subscriber_t* subscriber = malloc(sizeof(subscriber_t));
@@ -420,13 +373,124 @@ int register_subscriber_command(char* client_named_pipe_path, char* box_name) {
         new_subscriber_node->next = box->subscribers;
     }
 
-    fprintf(stdout, "SUBSCRIBER ADDED\n");
+    // open the box
+    int box_fd = tfs_open(box->box_name, TFS_O_APPEND);
 
-    if (get_old_messages(box, client_named_pipe_path) < 0) {
-        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+    if (box_fd < 0) {
+        fprintf(stderr, "[ERROR]: Could not open box %s\n", box->box_name);
+        return -1;
+    }
+
+    // rewind the offset back to the beginning of the box
+    if (tfs_rewind_offset(box_fd) < 0) {
+        fprintf(stderr, "[ERROR]: Could not rewind offset for box %s\n", box->box_name);
+        return -1;
+    }
+    
+    // read the messages from the box
+    message_list_t* messages = box->messages_size;
+    char* message = (char*) malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+    ssize_t num_bytes = tfs_read(box_fd, message, messages->message_size);
+
+    if (num_bytes < 0) {
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+            WARN("failed to unlock mutex: %s", strerror(errno));
             return -1;
         }
+        fprintf(stderr, "[ERROR]: Could not read message from box %s: %s\n", box->box_name, strerror(errno));
         return -1;
+    }
+    // loop to get old messages
+    while (true) {
+        // send the message to the subscriber
+        int pipe_fd = open(client_named_pipe_path, O_WRONLY);
+        if (pipe_fd < 0) {
+            fprintf(stderr, "[ERROR]: Could not open pipe %s\n", client_named_pipe_path);
+            return -1;
+        }
+        u_int8_t code = OP_CODE_SUBSCRIBER_MESSAGE;
+        char* message_to_send = create_message(code, message);
+        
+        if (write(pipe_fd, message_to_send, 1025) < 0) {
+            if (errno == EPIPE) {
+                fprintf(stderr, "subscriber closed his pipe\n");
+                // remove the subscriber from the box
+                if (remove_subscriber_from_box(box, client_named_pipe_path) < 0){
+                    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                        WARN("failed to unlock mutex: %s", strerror(errno));
+                        return -1;
+                    }
+                    return -1;
+                }
+                if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                    WARN("failed to unlock mutex: %s", strerror(errno));
+                    return -1;
+                }
+                return 0;
+            }
+            if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                WARN("failed to unlock mutex: %s", strerror(errno));
+                return -1;
+            }
+            return -1;
+        }
+
+        // check if there are no more messages
+        if (messages->next == NULL) {
+            break;
+        }
+
+        // get the next message size
+        messages = messages->next;
+
+        memset(message, 0, sizeof(char) * MAX_MESSAGE_SIZE);
+        
+        num_bytes = tfs_read(box_fd, message, messages->message_size);
+    }
+
+    // subscriber listens to box for new messages
+    while (true){
+        // wait for the condition variable to be signaled
+        if (pthread_cond_wait(&box->box_cond, &box_list_mutex) != 0) {
+            return -1;
+        }
+
+        //GET THE MESSAGES FROM THE BOX
+
+        // initialize message to write
+        char* message_to_write = (char*) malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+
+        // read from the box
+        num_bytes = tfs_read(box_fd, message, messages->message_size);
+
+        int pipe_fd = open(client_named_pipe_path, O_WRONLY);
+        if (pipe_fd < 0) {
+            fprintf(stderr, "[ERROR]: Could not open pipe %s\n", client_named_pipe_path);
+            return -1;
+        }
+
+        u_int8_t code = OP_CODE_SUBSCRIBER_MESSAGE;
+        message = create_message(code, message_to_write);
+
+        if (write(pipe_fd, message, 1025) < 0) {
+            if (errno == EPIPE) {
+                fprintf(stderr, "subscriber closed his pipe\n");
+                // remove the subscriber from the box
+                if (remove_subscriber_from_box(box, client_named_pipe_path) < 0){
+                    if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                        WARN("failed to unlock mutex: %s", strerror(errno));
+                        return -1;
+                    }
+                    return -1;
+                }
+                if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex
+                    WARN("failed to unlock mutex: %s", strerror(errno));
+                    return -1;
+                }
+                return 0;
+            }
+            return -1;
+        }
     }
 
     // unlock the box
@@ -446,9 +510,8 @@ char* create_listing_message(box_list_t* box_node) {
     
     // last
     u_int8_t last = 0;
-    if (box_node->next == NULL) {
+    if (box_node->next == NULL)
         last = 1;
-    }
     memcpy(message + 1, &last, sizeof(u_int8_t));
     
     // box_name
@@ -456,7 +519,6 @@ char* create_listing_message(box_list_t* box_node) {
     strcpy(box_name, box_node->box->box_name);
     memcpy(message + 1 + 1, box_name, strlen(box_name));
     memset(message + 1 + 1 + strlen(box_name), '\0', 32 - strlen(box_name));
-    fprintf(stderr, "box_name: %s\n", box_name);
 
     // box_size
     u_int64_t box_size = sizeof(box_node->box);
@@ -626,6 +688,15 @@ int write_to_box(char* box_name, char* message, size_t message_size){
 
         message_size_node->next = new_message_node;
     }
+
+    // signal the box
+    if (pthread_cond_broadcast(&box->box_cond) == -1) {
+        fprintf(stderr, "failed: could not signal box: %s\n", box_name);
+        if (pthread_mutex_unlock(&box_list_mutex) == -1){
+            return -1;
+        }
+        return -1;
+    }
     
     // unlock the box list
     if (pthread_mutex_unlock(&box_list_mutex) == -1){
@@ -678,11 +749,6 @@ int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box
         }
 
         fprintf(stderr, "success: wrote message to box: %s\n", box_name);
-
-        // send the message to all the subscribers of the box
-        if (spread_message(message, publisher_named_pipe) < 0) {
-            return -1;
-        }
     }
 
     pthread_mutex_unlock(&box_list_mutex);  // unlock the mutex

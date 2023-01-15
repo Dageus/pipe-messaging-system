@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <pthread.h>
 
 
 #define BOX_MESSAGE_SIZE 289
@@ -57,6 +58,7 @@ typedef struct {
     char *publisher_named_pipe;
     u_int64_t num_subscribers;
     message_list_t* messages_size;
+    pthread_cond_t box_cond;
 } box_t;
 
 typedef struct box_list_t{
@@ -69,13 +71,6 @@ typedef struct {
     char* register_pipe_name;            // Path to the server's named pipe
     size_t max_sessions;                    // Maximum number of concurrent sessions
 } mbroker_t;
-
-/*
-typedef struct {
-    void (func)(void*);
-    void* arg;
-} session_t;
-*/
 
 typedef struct {
     u_int8_t op_code;
