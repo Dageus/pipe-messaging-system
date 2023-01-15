@@ -24,14 +24,16 @@ int process_command(int pipe_fd, u_int8_t code) {
         if (num_bytes < 0) {        // error
             return -1;
         }
+        if (return_code < 0) {     // box not removed
             char error_message[1024];
-            num_bytes = read(pipe_fd, error_message, MAX_MESSAGE_SIZE);
-            if (num_bytes < 0) {    // error
+            num_bytes = read(pipe_fd, error_message, sizeof(error_message));
+            if (num_bytes < 0) {    
                 return -1;
             }
-            fprintf(stdout, "error message: %s\n", error_message);
             error_box_response(error_message);
+        } else {
             succesful_box_response();
+        }
         break;
     }
     case 6:{                        // responde to box removal
@@ -47,7 +49,6 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    
                 return -1;
             }
-            fprintf(stdout, "error message: %s\n", error_message);
             error_box_response(error_message);
         } else {
             succesful_box_response();
@@ -67,14 +68,10 @@ int process_command(int pipe_fd, u_int8_t code) {
             fprintf(stdout, "last: %zu\n", last);
             // parse the box name
             char box_name[32];
-            fprintf(stdout, "box_name about to read\n");
             num_bytes = read(pipe_fd, box_name, sizeof(char) * 32);
-            fprintf(stdout, "box_name read\n");
             if (num_bytes < 0) {    // error
                 return -1;
             }
-
-            fprintf(stdout, "box_name is: %s\n", strcmp(box_name, "") == 0 ? "empty" : box_name);
 
             if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
                 last = 1;
@@ -88,7 +85,7 @@ int process_command(int pipe_fd, u_int8_t code) {
                 return -1;
             }
 
-            fprintf(stdout, "box_size: %ld\n", box_size);
+            fprintf(stdout, "box_size: %zu\n", box_size);
 
             // parse the numer of publishers
             size_t n_publishers;
@@ -145,7 +142,6 @@ char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsi
     memset(message + strlen(client_pipe_name) + 1, '\0', 256 - strlen(client_pipe_name));
     if (box_name != NULL)
         memcpy(message + 1 + 256, box_name, strlen(box_name));
-    fprintf(stderr, "message: %s\n", message);
     return message;
 }
 
