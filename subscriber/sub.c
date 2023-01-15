@@ -13,6 +13,7 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <signal.h>
+#include <pthread.h>
 
 int messages_received = 0;  // number of messages received by the subscriber
 volatile sig_atomic_t stop = 0;
@@ -198,3 +199,5 @@ int main(int argc, char **argv) {
 
     return -1;
 }
+
+//broadcast para variavel de condicao para que o subscriber possa ler quando o publisher escrever

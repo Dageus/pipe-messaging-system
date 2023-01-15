@@ -24,7 +24,6 @@ int process_command(int pipe_fd, u_int8_t code) {
         if (num_bytes < 0) {        // error
             return -1;
         }
-        if (return_code < 0) {     // box not created
             char error_message[1024];
             num_bytes = read(pipe_fd, error_message, MAX_MESSAGE_SIZE);
             if (num_bytes < 0) {    // error
@@ -32,9 +31,7 @@ int process_command(int pipe_fd, u_int8_t code) {
             }
             fprintf(stdout, "error message: %s\n", error_message);
             error_box_response(error_message);
-        } else {
             succesful_box_response();
-        }
         break;
     }
     case 6:{                        // responde to box removal
@@ -58,7 +55,7 @@ int process_command(int pipe_fd, u_int8_t code) {
         break;
     }
     case 8:{                        // list boxes
-        u_int8_t last;
+        size_t last;
         last = 0;
         while (last == 0){          // make sure to check if its the last box or not
             // parse the return code
@@ -67,15 +64,17 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
-            fprintf(stdout, "last: %d\n", last);
+            fprintf(stdout, "last: %zu\n", last);
             // parse the box name
             char box_name[32];
+            fprintf(stdout, "box_name about to read\n");
             num_bytes = read(pipe_fd, box_name, sizeof(char) * 32);
+            fprintf(stdout, "box_name read\n");
             if (num_bytes < 0) {    // error
                 return -1;
             }
 
-            fprintf(stdout, "box_name: %s\n", box_name);
+            fprintf(stdout, "box_name is: %s\n", strcmp(box_name, "") == 0 ? "empty" : box_name);
 
             if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
                 last = 1;
@@ -83,7 +82,7 @@ int process_command(int pipe_fd, u_int8_t code) {
                 break;
             }
 
-            u_int64_t box_size;
+            size_t box_size;
             num_bytes = read(pipe_fd, &box_size, sizeof(box_size));
             if (num_bytes < 0) {    // error
                 return -1;
@@ -92,14 +91,14 @@ int process_command(int pipe_fd, u_int8_t code) {
             fprintf(stdout, "box_size: %ld\n", box_size);
 
             // parse the numer of publishers
-            u_int64_t n_publishers;
+            size_t n_publishers;
             num_bytes = read(pipe_fd, &n_publishers, sizeof(n_publishers));
             if (num_bytes < 0) {    // error
                 return -1;
             }
 
             // parse the number of subscribers
-            u_int64_t n_subscribers;
+            size_t n_subscribers;
             num_bytes = read(pipe_fd, &n_subscribers, sizeof(n_subscribers));
             if (num_bytes < 0) {    // error
                 return -1;
