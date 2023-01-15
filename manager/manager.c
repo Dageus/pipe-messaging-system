@@ -135,6 +135,7 @@ char* create_message(u_int8_t code, char* client_pipe_name, char* box_name, unsi
     memset(message + strlen(client_pipe_name) + 1, '\0', 256 - strlen(client_pipe_name));
     if (box_name != NULL)
         memcpy(message + 1 + 256, box_name, strlen(box_name));
+    fprintf(stderr, "message: %s\n", message);
     return message;
 }
 

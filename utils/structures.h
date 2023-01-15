@@ -9,7 +9,7 @@
 
 
 #define BOX_MESSAGE_SIZE 289
-#define BOX_LIST_MESSAGE_SIZE 264
+#define BOX_LIST_MESSAGE_SIZE 257
 #define MAX_MESSAGE_SIZE 1024
 #define ANSWER_MESSAGE_SIZE 1029
 #define MAX_BOX_NAME_SIZE 32
@@ -94,4 +94,5 @@ typedef struct {
     u_int8_t op_code;
     int pipe_fd;
 } session_t;
+
 #endif

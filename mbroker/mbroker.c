@@ -682,7 +682,7 @@ int remove_box(int pipe_fd){
     // parse the client named pipe path
     char client_named_pipe_path[256];
     ssize_t num_bytes;
-    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
     if (num_bytes < 0) { // error
         return -1;
     }
@@ -730,10 +730,13 @@ int list_boxes(int pipe_fd){
 
     // parse the client pipe name
     char client_named_pipe_path[256];
-    ssize_t num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(client_named_pipe_path));
+    ssize_t num_bytes;
+    num_bytes = read(pipe_fd, client_named_pipe_path, sizeof(char)*256);
     if (num_bytes < 0) { // error
         return -1;
     }
+
+    fprintf(stderr, "list_boxes: client_named_pipe_path = %s\n", client_named_pipe_path);
 
     // send the list of boxes to the client
     if (list_boxes_command(client_named_pipe_path) < 0) {
@@ -834,6 +837,7 @@ void *session_thread() {
             exit(EXIT_FAILURE);
         }
 
+        /*
         switch (data->op_code) {
             // register a publisher
             case OP_CODE_REGISTER_PUBLISHER:{
@@ -880,7 +884,7 @@ void *session_thread() {
                 return -1;
             }
         }
-
+        */
     }
     return NULL;
 }
