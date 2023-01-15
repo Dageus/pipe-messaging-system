@@ -70,30 +70,40 @@ int process_command(int pipe_fd, u_int8_t code) {
             if (num_bytes < 0) {    // error
                 return -1;
             }
-            if (strcmp(box_name, "") != 0 && last == 1) { // this means there are no boxes
+
+            fprintf(stdout, "I got here 1 \n");
+
+            if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
                 break;
             }
+
             u_int64_t box_size;
             num_bytes = read(pipe_fd, &box_size, sizeof(box_size));
             if (num_bytes < 0) {    // error
                 return -1;
             }
+
             // parse the numer of publishers
             u_int64_t n_publishers;
             num_bytes = read(pipe_fd, &n_publishers, sizeof(n_publishers));
             if (num_bytes < 0) {    // error
                 return -1;
             }
+
             // parse the number of subscribers
             u_int64_t n_subscribers;
             num_bytes = read(pipe_fd, &n_subscribers, sizeof(n_subscribers));
             if (num_bytes < 0) {    // error
                 return -1;
             }
-            if (strcmp(box_name, "") != 0 && last == 1) { // this means there are no boxes
+
+            fprintf(stdout, "I got here 2 \n");
+
+            if (strcmp(box_name, "") == 0 && last == 1) { // this means there are no boxes
                 no_boxes_found();
                 break;
             }
+
             list_boxes_message(box_name, box_size, n_publishers, n_subscribers);
         }
         break;
@@ -154,7 +164,7 @@ int list_boxes_request(char* register_pipe_name, char* named_pipe) {
     char *message = create_message(code, named_pipe, NULL, BOX_LIST_MESSAGE_SIZE);
 
     // send this to the mbroker through the named pipe
-    if (write(pipe_fd, message, sizeof(message)) < 0) {
+    if (write(pipe_fd, message, BOX_LIST_MESSAGE_SIZE) < 0) {
         fprintf(stderr, "failed: could not write to pipe: %s\n", register_pipe_name);
         return -1;
     }

@@ -209,6 +209,8 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
 
         // get the next message size
         messages = messages->next;
+
+        memset(message, 0, sizeof(char) * MAX_MESSAGE_SIZE);
         
         num_bytes = tfs_read(box_fd, message, messages->message_size);
     }
@@ -727,7 +729,7 @@ int list_boxes(int pipe_fd){
     if (pipe_fd < 0) {
         return -1;
     }
-
+    
     // parse the client pipe name
     char client_named_pipe_path[256];
     ssize_t num_bytes;
@@ -735,8 +737,6 @@ int list_boxes(int pipe_fd){
     if (num_bytes < 0) { // error
         return -1;
     }
-
-    fprintf(stderr, "list_boxes: client_named_pipe_path = %s\n", client_named_pipe_path);
 
     // send the list of boxes to the client
     if (list_boxes_command(client_named_pipe_path) < 0) {
@@ -778,10 +778,11 @@ int read_pipe_input(int pipe_fd){
     session->op_code = code;
 
     pcq_enqueue(pc_queue, &session);
-
+    
     switch (code) {
         // register a publisher
         case OP_CODE_REGISTER_PUBLISHER:{
+            fprintf(stderr, "read_pipe_input: OP_CODE_REGISTER_PUBLISHER received\n");
             if (register_publisher(pipe_fd) < 0){
                 return -1;
             }
@@ -790,6 +791,7 @@ int read_pipe_input(int pipe_fd){
         }
         // register a subscriber
         case OP_CODE_REGISTER_SUBSCRIBER:{
+            fprintf(stderr, "read_pipe_input: OP_CODE_REGISTER_SUBSCRIBER received\n");
             if (register_subscriber(pipe_fd) < 0){
                 return -1;
             }
@@ -798,6 +800,7 @@ int read_pipe_input(int pipe_fd){
         }
         // create a box
         case OP_CODE_REGISTER_BOX:{
+            fprintf(stderr, "read_pipe_input: OP_CODE_REGISTER_BOX received\n");
             if (register_box(pipe_fd) < 0){
                 return -1;
             }
@@ -805,7 +808,8 @@ int read_pipe_input(int pipe_fd){
             break;
         }
         // remove a box
-        case OP_CODE_REMOVE_BOX:{    
+        case OP_CODE_REMOVE_BOX:{   
+            fprintf(stderr, "read_pipe_input: OP_CODE_REMOVE_BOX received\n"); 
             if (remove_box(pipe_fd) < 0){
                 return -1;
             }
@@ -814,6 +818,7 @@ int read_pipe_input(int pipe_fd){
         }
         // list boxes
         case OP_CODE_BOX_LIST:{
+            fprintf(stderr, "read_pipe_input: OP_CODE_BOX_LIST received\n");
             if (list_boxes(pipe_fd) < 0){
                 return -1;
             }
