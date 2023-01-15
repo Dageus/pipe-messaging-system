@@ -264,10 +264,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
     // Determine how many bytes to read
-    size_t to_read = inode->i_size - file->of_offset;
-    if (to_read > len) {
-        to_read = len;
-    }
+    size_t to_read = len;
 
     if (to_read > 0) {
         void *block = data_block_get(inode->i_data_block);

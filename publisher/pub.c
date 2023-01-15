@@ -1,5 +1,7 @@
 #include "logging.h"
 #include "structures.h"
+#include "messages.h"
+#include "pub.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

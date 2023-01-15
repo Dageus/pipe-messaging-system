@@ -178,7 +178,7 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
     
     // read the messages from the box
     message_list_t* messages = box->messages_size;
-    char* message = (char*) malloc(sizeof(char) * messages->message_size);
+    char* message = (char*) malloc(sizeof(char) * MAX_MESSAGE_SIZE);
     ssize_t num_bytes = tfs_read(box_fd, message, messages->message_size);
 
     if (num_bytes < 0) {
@@ -209,7 +209,7 @@ int get_old_messages(box_t* box, char* subscriber_pipe_name) {
 
         // get the next message size
         messages = messages->next;
-
+        
         num_bytes = tfs_read(box_fd, message, messages->message_size);
     }
 
@@ -464,8 +464,6 @@ int write_to_box(char* box_name, char* message, size_t message_size){
 
         message_size_node->next = new_message_node;
     }
-
-    fprintf(stderr, "[INFO]: wrote to box successfully\n");
     
     return 0;
 }
@@ -595,8 +593,6 @@ int register_publisher(int pipe_fd){
         }
     }
 
-    fprintf(stderr, "[INFO]: EXITING REGISTER PUBLISHER\n");
-
     return 0;
 }
 
@@ -621,8 +617,6 @@ int register_subscriber(int pipe_fd){
         return -1;
     }
 
-    fprintf(stderr, "[INFO]: client_named_pipe_path: %s\n", client_named_pipe_path);
-
     // register the subscriber
     if (register_subscriber_command(client_named_pipe_path, box_name) < 0) {
         return -1;
@@ -644,7 +638,6 @@ int register_box(int pipe_fd){
     if (num_bytes < 0) { // error
         return -1;
     }
-    fprintf(stderr, "[INFO]: client_named_pipe_path: %s\n", client_named_pipe_path);
 
     // parse the box name
     char box_name[32];
@@ -652,12 +645,11 @@ int register_box(int pipe_fd){
     if (num_bytes < 0) { // error
         return -1;
     }
-    fprintf(stderr, "[INFO]: box_name: %s\n", box_name);
 
     // create the box
     int32_t return_code = create_box_command(box_name);
     u_int8_t op_code = OP_CODE_ANSWER_TO_CREATION;
-    char *answer = create_answer(op_code, return_code, "henlo", ANSWER_MESSAGE_SIZE);
+    char *answer = create_answer(op_code, return_code, "failed: could not register box", ANSWER_MESSAGE_SIZE);
     if (return_code < 0) {
         return -1;
     }
@@ -705,7 +697,7 @@ int remove_box(int pipe_fd){
     // remove the box
     int32_t return_code = remove_box_command(box_name);
     u_int8_t op_code = OP_CODE_ANSWER_TO_REMOVAL;
-    char *answer = create_answer(op_code, return_code, "henloo 2", ANSWER_MESSAGE_SIZE);
+    char *answer = create_answer(op_code, return_code, "failed: could not remove box", ANSWER_MESSAGE_SIZE);
     if (return_code < 0) {
         return -1;
     }
@@ -763,6 +755,11 @@ int read_pipe_input(int pipe_fd){
 
     // data is available on the named pipe
     // read the data from the pipe
+
+
+    // threads will be enqueue in this function
+
+
     u_int8_t code;
     ssize_t num_bytes = read(pipe_fd, &code, sizeof(code));
     if (num_bytes == 0) {
@@ -772,6 +769,12 @@ int read_pipe_input(int pipe_fd){
         // num_bytes == -1 indicates error
         exit(EXIT_FAILURE);
     }
+
+    session_t* session = (session_t *)malloc(sizeof(session_t));
+    session->pipe_fd = pipe_fd;
+    session->op_code = code;
+
+    pcq_enqueue(pc_queue, &session);
 
     switch (code) {
         // register a publisher
@@ -829,6 +832,53 @@ void *session_thread() {
         if (data == NULL) {
             fprintf(stderr, "failed: could not dequeue from pcq\n");
             exit(EXIT_FAILURE);
+        }
+
+        switch (data->op_code) {
+            // register a publisher
+            case OP_CODE_REGISTER_PUBLISHER:{
+                if (register_publisher(data->pipe_fd) < 0){
+                    return -1;
+                }
+
+                break;
+            }
+            // register a subscriber
+            case OP_CODE_REGISTER_SUBSCRIBER:{
+                if (register_subscriber(data->pipe_fd) < 0){
+                    return -1;
+                }
+                
+                break;
+            }
+            // create a box
+            case OP_CODE_REGISTER_BOX:{
+                if (register_box(data->pipe_fd) < 0){
+                    return -1;
+                }
+                
+                break;
+            }
+            // remove a box
+            case OP_CODE_REMOVE_BOX:{    
+                if (remove_box(data->pipe_fd) < 0){
+                    return -1;
+                }
+                
+                break;
+            }
+            // list boxes
+            case OP_CODE_BOX_LIST:{
+                if (list_boxes(data->pipe_fd) < 0){
+                    return -1;
+                }
+                
+                break;
+            }
+            default:{                
+                fprintf(stderr, "[ERR]: Invalid command code: %d\n", data->op_code);
+                return -1;
+            }
         }
 
     }
@@ -914,8 +964,6 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    fprintf(stderr, "[INFO]: starting mbroker...\n");
-
     mbroker = (mbroker_t*) malloc(sizeof(mbroker_t));
 
     mbroker->register_pipe_name = argv[1];              // register_pipe_name is the name of the pipe to which the manager wants to connect to
@@ -930,8 +978,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed: could not initialize mbroker\n");
         return -1;
     }
-
-    fprintf(stderr, "[INFO]: mbroker started\n");
 
     int pipe_fd = open(mbroker->register_pipe_name, O_RDONLY);
     if (pipe_fd < 0) {

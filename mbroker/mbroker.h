@@ -80,7 +80,7 @@ int write_to_box(char* box_name, char* message, size_t message_size);
 int read_from_box(char* box_name, char* message, size_t message_size);
 
 //Function that reads from the pipe
-int read_publisher_pipe_input(int pipe_fd, fd_set read_fds, char* publisher_named_pipe, char* box_name);
+int read_publisher_pipe_input(int pipe_fd, char* publisher_named_pipe, char* box_name);
 
 //Function that listens to the publisher
 int listen_to_publisher(char* publisher_named_pipe, char* box_name);

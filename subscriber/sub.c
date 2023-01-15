@@ -1,6 +1,7 @@
 #include "logging.h"
 #include "structures.h"
 #include "messages.h"
+#include "sub.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,8 +19,8 @@ volatile sig_atomic_t stop = 0;
 
 void sigint_handler(int signum) {
     (void)signum;
-    fprintf(stderr, "[INFO]: received SIGINT\n");
     stop = 1;
+    close_subscriber(EXIT_SUCCESS);
 }
 
 int read_pipe_input(int pipe_fd) {
@@ -126,6 +127,11 @@ int check_args(char *register_pipe_name, char *pipe_name, char *box_name) {
     return 0;
 }
 
+void close_subscriber(int exit_code) {
+    // print the number of messages received
+    fprintf(stderr, "\n[INFO]: received %d messages\n", messages_received);
+    exit(exit_code);
+}
 
 /*
  * format:
@@ -177,7 +183,10 @@ int main(int argc, char **argv) {
     }
 
     // close the named pipe
-    close(pipe_fd);
+    if (close(pipe_fd) < 0) {
+        fprintf(stderr, "failed: could not close pipe: %s\n", pipe_name);
+        return -1;
+    }
 
     // remove the named pipe
     if (unlink(pipe_name) < 0) {
@@ -185,8 +194,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    // print the number of messages received
-    fprintf(stdout, "received %d messages\n", messages_received);
+    close_subscriber(EXIT_SUCCESS);
 
     return -1;
 }
