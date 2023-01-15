@@ -83,9 +83,15 @@ typedef struct {
     size_t max_sessions;                    // Maximum number of concurrent sessions
 } mbroker_t;
 
+/*
+typedef struct {
+    void (func)(void*);
+    void* arg;
+} session_t;
+*/
+
 typedef struct {
     u_int8_t op_code;
-    char* client_named_pipe;
-    char* box_name;
+    int pipe_fd;
 } session_t;
 #endif
