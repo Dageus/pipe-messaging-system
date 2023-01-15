@@ -488,9 +488,7 @@ char* create_listing_error_message(){
     memcpy(message + sizeof(u_int8_t), &last, sizeof(u_int8_t));
     
     // box_name
-    char box_name[32] = "error";
-    memcpy(message + sizeof(u_int8_t) + sizeof(u_int8_t), box_name, strlen(box_name));
-    memset(message + sizeof(u_int8_t) + sizeof(u_int8_t) + strlen(box_name), '\0', 32 - strlen(box_name));
+    memset(message + sizeof(u_int8_t) + sizeof(u_int8_t), '\0', 32);
 
     // box_size
     u_int64_t box_size = 0;
@@ -524,10 +522,8 @@ int list_boxes_command(char* manager_pipe_name){
     }
     box_list_t* box_node = box_list;
     if (box_node == NULL) {
-        fprintf(stderr, "failed: no boxes to list\n");
         char* message = create_listing_error_message();
-        fprintf(stderr, "message: %s\n", message);
-        if (write(pipe_fd, message, sizeof(message)) < 0) {
+        if (write(pipe_fd, message, 1029) < 0) {
             fprintf(stderr, "failed: could not write to pipe: %s\n", manager_pipe_name);
             if (pthread_mutex_unlock(&box_list_mutex) == -1){
                 return -1;
