@@ -64,7 +64,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
         return -1;
     }
     session_t *session;
-    memcpy(&session, elem, sizeof(session_t*));
+    memcpy(&session, elem, sizeof(session_t*)); // should've put pointer in elem
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail = (queue->pcq_tail + 1) % queue->pcq_capacity;
     if (pthread_mutex_lock(&queue->pcq_current_size_lock) != 0) {
