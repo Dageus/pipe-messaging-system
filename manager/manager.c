@@ -248,12 +248,6 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    char* path = "/tmp/";
-    char* full_path = malloc(strlen(path) + strlen(pipe_name) + 1);
-    memset(full_path, path, strlen(path));
-    memset(full_path + strlen(path), pipe_name, strlen(pipe_name));
-
-
     if (mkfifo(pipe_name, 0640) < 0) {
         fprintf(stderr, "failed: could not create pipe: %s\n", pipe_name);
         exit(EXIT_FAILURE);

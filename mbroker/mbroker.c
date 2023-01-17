@@ -280,7 +280,6 @@ int32_t create_box_command(char* box_name){
     if (box_list == NULL){
         box_list = (box_list_t*) malloc(sizeof(box_list_t));
         box_list->box = box;
-        box_list->num_boxes = 1;
         box_list->next = NULL;
     } else {
         box_list_t* box_node = box_list;
@@ -289,7 +288,6 @@ int32_t create_box_command(char* box_name){
         }
         box_list_t* new_box_node = (box_list_t*) malloc(sizeof(box_list_t));
         new_box_node->box = box;
-        box_node->num_boxes++;
         new_box_node->next = NULL;
         box_node->next = new_box_node;
     }
@@ -317,7 +315,6 @@ int remove_box_command(char* box_name) {
         }
         prev_box_node = box_node;
         box_node = box_node->next;
-        box_list->num_boxes--;
         free(prev_box_node->box->box_name);
         if (tfs_unlink(box_name) < 0){
             if (pthread_mutex_unlock(&box_list_mutex) == -1){ // unlock the mutex

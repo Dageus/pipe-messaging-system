@@ -63,7 +63,6 @@ typedef struct {
 
 typedef struct box_list_t{
     box_t* box;
-    int num_boxes;
     struct box_list_t* next;
 } box_list_t;
 
